@@ -1,7 +1,11 @@
-# Collections
-collections of some bars that i made
-note: i built this for my productivity and my own satisfaction.
+# Collections — Bars
 
-## Overcast
-#### Bar
-![Preview](./overcast/screenshots/bar.jpg)
+A collection of custom desktop bars and UI components I've built as personal experiments, productivity tools, and design explorations.
+
+---
+
+# Overcast
+designed to provide quick access to essential information and actions.
+## Preview
+![Overcast Bar](./overcast/screenshots/bar.jpg)
+> Overcast is primarily a personal project and an ongoing experiment in desktop interface design.

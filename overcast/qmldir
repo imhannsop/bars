@@ -1,0 +1,9 @@
+module shell
+
+singleton Theme 1.0 Theme.qml
+singleton SystemState 1.0 SystemState.qml
+
+Notifications 1.0 Notifications.qml
+Bar 1.0 Bar.qml
+ControlCenter 1.0 ControlCenter.qml
+Launcher 1.0 Launcher.qml

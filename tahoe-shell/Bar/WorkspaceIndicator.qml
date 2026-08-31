@@ -2,11 +2,10 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Niri workspace indicator - drop into any Row in your bar
+// Niri workspace indicator
 Item {
     id: root
 
-    // Options
     property int dotSize: 14
     property int ringSize: 16     // ring must fully cover the dot
     property int ringBorder: 4
@@ -16,14 +15,13 @@ Item {
     property color bgColor: "#000000" // must match the bar background
     property int animDuration: 250
 
-    // State - each entry: { id, idx, isFocused }
+    // State: { id, idx, isFocused }
     property var workspaces: []
     property int focusedIndex: -1
 
     implicitWidth: dotsRow.implicitWidth
     implicitHeight: ringSize
 
-    // Helpers
     function rebuildFromList(list) {
         var arr = []
         for (var i = 0; i < list.length; i++) {
@@ -56,12 +54,13 @@ Item {
         focusedIndex = -1
     }
 
-    function focusWorkspace(wsId) {
-        switchProcess.command = ["niri", "msg", "action", "focus-workspace", String(wsId)]
+    function focusWorkspace(wsIdx) {
+        // Focus by monitor position (idx), not internal ID
+        switchProcess.command = ["niri", "msg", "action", "focus-workspace", String(wsIdx)]
         switchProcess.running = true
     }
 
-    // Live event stream from Niri
+    // Listen to Niri events
     Process {
         id: eventStream
         command: ["niri", "msg", "--json", "event-stream"]
@@ -87,7 +86,7 @@ Item {
             }
         }
 
-        // Reconnect if the socket drops (niri restarts)
+        // Reconnect on socket drop
         onExited: (exitCode, exitStatus) => restartTimer.start()
     }
 
@@ -97,12 +96,10 @@ Item {
         onTriggered: eventStream.running = true
     }
 
-    // One-shot process for switching workspaces on click
     Process {
         id: switchProcess
     }
 
-    // Base dots row
     Row {
         id: dotsRow
         anchors.left: parent.left
@@ -127,13 +124,13 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.focusWorkspace(modelData.id)
+                    onClicked: root.focusWorkspace(modelData.idx)
                 }
             }
         }
     }
 
-    // Static ring around the active workspace
+    // Active workspace ring
     Rectangle {
         id: activeRing
         width: root.ringSize
@@ -150,7 +147,7 @@ Item {
            : 0
     }
 
-    // Sliding dot that masks the base dot as it moves between workspaces
+    // Animated sliding dot
     Rectangle {
         id: maskDot
         width: root.ringSize - root.ringBorder * 2

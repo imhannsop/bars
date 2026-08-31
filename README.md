@@ -22,4 +22,4 @@ i made this because i honestly like the UI of macOS Tahoe and also to design wha
 
 ## Preview
 
-![Overcast Bar](./tahoe-shell/images/uii=.jpeg)
+![Overcast Bar](./tahoe-shell/images/uii.jpg)

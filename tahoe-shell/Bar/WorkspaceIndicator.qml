@@ -2,20 +2,22 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Niri workspace indicator
 Item {
     id: root
 
     property int dotSize: 14
-    property int ringSize: 16     // ring must fully cover the dot
+    property int ringSize: 16
     property int ringBorder: 4
     property int dotSpacing: 9
     property color inactiveColor: "#ffffff"
     property color ringColor: "#ffffff"
-    property color bgColor: "#000000" // must match the bar background
-    property int animDuration: 250
+    property color bgColor: "#000000"
+    property int animDuration: 180
 
-    // State: { id, idx, isFocused }
+    // Bezier curve for animations
+    readonly property var niriCurve: [0.25, 1.0, 0.5, 1.0, 1.0, 1.0]
+
+    property bool standalone: true
     property var workspaces: []
     property int focusedIndex: -1
 
@@ -55,28 +57,21 @@ Item {
     }
 
     function focusWorkspace(wsIdx) {
-        // Focus by monitor position (idx), not internal ID
         switchProcess.command = ["niri", "msg", "action", "focus-workspace", String(wsIdx)]
         switchProcess.running = true
     }
 
-    // Listen to Niri events
     Process {
         id: eventStream
         command: ["niri", "msg", "--json", "event-stream"]
-        running: true
+        running: root.standalone
 
         stdout: SplitParser {
             splitMarker: "\n"
             onRead: data => {
-                if (!data || data.trim().length === 0)
-                    return
+                if (!data || data.trim().length === 0) return
                 var evt
-                try {
-                    evt = JSON.parse(data)
-                } catch (e) {
-                    return
-                }
+                try { evt = JSON.parse(data) } catch (e) { return }
 
                 if (evt.WorkspacesChanged) {
                     root.rebuildFromList(evt.WorkspacesChanged.workspaces)
@@ -86,8 +81,7 @@ Item {
             }
         }
 
-        // Reconnect on socket drop
-        onExited: (exitCode, exitStatus) => restartTimer.start()
+        onExited: (exitCode, exitStatus) => { if (root.standalone) restartTimer.start() }
     }
 
     Timer {
@@ -96,9 +90,7 @@ Item {
         onTriggered: eventStream.running = true
     }
 
-    Process {
-        id: switchProcess
-    }
+    Process { id: switchProcess }
 
     Row {
         id: dotsRow
@@ -147,7 +139,7 @@ Item {
            : 0
     }
 
-    // Animated sliding dot
+    // Animated inner circle
     Rectangle {
         id: maskDot
         width: root.ringSize - root.ringBorder * 2
@@ -162,7 +154,11 @@ Item {
            : root.ringBorder
 
         Behavior on x {
-            NumberAnimation { duration: root.animDuration; easing.type: Easing.OutCubic }
+            NumberAnimation {
+                duration: root.animDuration
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: root.niriCurve
+            }
         }
     }
 }

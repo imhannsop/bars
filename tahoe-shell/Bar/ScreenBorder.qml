@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 
-// Fullscreen rounded border overlay
+// Border overlay
 PanelWindow {
     id: screenBorder
     screen: Quickshell.screens[0]

@@ -16,7 +16,7 @@ designed to provide quick access to essential information and actions.
 
 ---
 
-# Tahoe-Shell
+# Tahoe-Shell - WIP
 
 i made this because i honestly like the UI of macOS Tahoe and also to design what tahoe must be (base on my opinion btw).
 

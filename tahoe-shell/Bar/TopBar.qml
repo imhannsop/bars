@@ -33,79 +33,43 @@ PanelWindow {
 
     WlrLayershell.layer: WlrLayer.Overlay
 
-    // Panel expanded state
     property bool expanded: false
 
-    // Spring curves
-    readonly property var iosExpandCurve: [0.32, 0.72, 0.0, 1.0, 1.0, 1.0]
-    readonly property var iosCollapseCurve: [0.40, 0.00, 0.2, 1.0, 1.0, 1.0]
+    property int expandDuration: 260
+    property int collapseDuration: 200
 
-    // Curve based on direction
-    readonly property var activeCurve: expanded ? iosExpandCurve : iosCollapseCurve
-
-    // Asymmetric timing
-    property int morphDuration: expanded ? 380 : 280
-
-    // Collapsed geometry
     property real collapsedWidth: 460
     property real collapsedHeight: 35
     property real collapsedNotchRadius: 20
     property real collapsedBottomRadius: 18
 
-    // Expanded geometry
-    property real expandedWidth: 710
+    property real expandedWidth: 650
     property real expandedHeight: 320
     property real expandedNotchRadius: 30
     property real expandedBottomRadius: 32
 
     property real collapsedClockSize: 15
-    property real expandedClockSize: 150
+    property real expandedClockSize: 110
 
-    property real collapsedClockWidth: 44
+    property real collapsedClockWidth: 64
     property real collapsedClockHeight: 17
     property real expandedClockHeight: 136
 
     property real collapsedClockXScale: 1.0
     property real expandedClockXScale: 0.64
-    property real clockXScale: collapsedClockXScale
 
     property real collapsedClockYScale: 1.0
-    property real expandedClockYScale: 1.2
+    property real expandedClockYScale: 1.8
+
+    property real barWidth: collapsedWidth
+    property real barHeight: collapsedHeight
+    property real notchRadius: collapsedNotchRadius
+    property real bottomRadius: collapsedBottomRadius
+    property real clockFontSize: collapsedClockSize
+    property real clockXScale: collapsedClockXScale
     property real clockYScale: collapsedClockYScale
 
-    // Dynamic geometry
-    property real barWidth: expanded ? expandedWidth : collapsedWidth
-    property real barHeight: expanded ? expandedHeight : collapsedHeight
-    property real notchRadius: expanded ? expandedNotchRadius : collapsedNotchRadius
-    property real bottomRadius: expanded ? expandedBottomRadius : collapsedBottomRadius
-    property real clockFontSize: expanded ? expandedClockSize : collapsedClockSize
-
-    Behavior on barWidth {
-        NumberAnimation { duration: window.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: window.activeCurve }
-    }
-    Behavior on barHeight {
-        NumberAnimation { duration: window.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: window.activeCurve }
-    }
-    Behavior on notchRadius {
-        NumberAnimation { duration: window.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: window.activeCurve }
-    }
-    Behavior on bottomRadius {
-        NumberAnimation { duration: window.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: window.activeCurve }
-    }
-    Behavior on clockFontSize {
-        NumberAnimation { duration: window.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: window.activeCurve }
-    }
-    Behavior on clockXScale {
-        NumberAnimation { duration: window.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: window.activeCurve }
-    }
-    Behavior on clockYScale {
-        NumberAnimation { duration: window.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: window.activeCurve }
-    }
-
-    onExpandedChanged: {
-        clockXScale = expanded ? expandedClockXScale : collapsedClockXScale
-        clockYScale = expanded ? expandedClockYScale : collapsedClockYScale
-    }
+    property real expandedContentOpacity: 0.0
 
     readonly property real maxNotchRadius: Math.max(collapsedNotchRadius, expandedNotchRadius)
 
@@ -116,8 +80,8 @@ PanelWindow {
     exclusiveZone: 30
 
     FontLoader {
-        id: ubuntuBold
-        source: "file:///usr/share/fonts/ubuntu/UbuntuMono-B.ttf"
+        id: sfProBold
+        source: "file:///home/ekoubu/.local/share/fonts/SFPro/SF-Pro-Display-Bold.otf"
     }
 
     FontLoader {
@@ -131,72 +95,36 @@ PanelWindow {
         opacity: 0
 
         transform: [
-            Translate {
-                id: entranceSlide
-                y: -30
-            },
-            Translate {
-                id: fullscreenSlide
-                y: 0
-            }
+            Translate { id: entranceSlide; y: -30 },
+            Translate { id: fullscreenSlide; y: 0 }
         ]
 
         enabled: !window.fullscreenActive
         state: window.debouncedFullscreen ? "hidden" : "shown"
 
         states: [
-            State {
-                name: "shown"
-                PropertyChanges { target: fullscreenSlide; y: 0 }
-            },
-            State {
-                name: "hidden"
-                PropertyChanges { target: fullscreenSlide; y: -(window.barHeight + window.notchRadius) }
-            }
+            State { name: "shown"; PropertyChanges { target: fullscreenSlide; y: 0 } },
+            State { name: "hidden"; PropertyChanges { target: fullscreenSlide; y: -(window.barHeight + window.notchRadius) } }
         ]
 
         transitions: [
             Transition {
                 to: "shown"
-                NumberAnimation {
-                    target: fullscreenSlide
-                    property: "y"
-                    duration: 180
-                    easing.type: Easing.OutExpo
-                }
+                NumberAnimation { target: fullscreenSlide; property: "y"; duration: 160; easing.type: Easing.OutExpo }
             },
             Transition {
                 to: "hidden"
-                NumberAnimation {
-                    target: fullscreenSlide
-                    property: "y"
-                    duration: 180
-                    easing.type: Easing.OutQuad
-                }
+                NumberAnimation { target: fullscreenSlide; property: "y"; duration: 160; easing.type: Easing.OutQuad }
             }
         ]
 
         SequentialAnimation {
             id: entranceAnim
             running: false
-
-            PauseAnimation { duration: 60 }
-
+            PauseAnimation { duration: 20 }
             ParallelAnimation {
-                NumberAnimation {
-                    target: entranceSlide
-                    property: "y"
-                    to: 0
-                    duration: 320
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: window.iosExpandCurve
-                }
-                OpacityAnimator {
-                    target: barContent
-                    to: 1.0
-                    duration: 220
-                    easing.type: Easing.OutCubic
-                }
+                NumberAnimation { target: entranceSlide; property: "y"; to: 0; duration: 220; easing.type: Easing.OutCubic }
+                OpacityAnimator { target: barContent; to: 1.0; duration: 160; easing.type: Easing.OutCubic }
             }
         }
 
@@ -209,13 +137,73 @@ PanelWindow {
             width: window.barWidth + window.notchRadius * 2
             height: window.barHeight
 
+            state: window.expanded ? "expanded" : "collapsed"
+
+            // Keep geometry and child positions in one state transition.
+            states: [
+                State {
+                    name: "collapsed"
+                    PropertyChanges { target: window; barWidth: window.collapsedWidth; barHeight: window.collapsedHeight; notchRadius: window.collapsedNotchRadius; bottomRadius: window.collapsedBottomRadius; clockFontSize: window.collapsedClockSize; clockXScale: window.collapsedClockXScale; clockYScale: window.collapsedClockYScale; expandedContentOpacity: 0.0 }
+                    PropertyChanges { target: wsIndicator; x: window.collapsedNotchRadius + 20; y: (window.collapsedHeight - wsIndicator.implicitHeight) / 2 }
+                    PropertyChanges { target: clockDisplay; x: window.collapsedWidth + window.collapsedNotchRadius - 20 - window.collapsedClockWidth; y: (window.collapsedHeight - window.collapsedClockHeight) / 2 }
+                    PropertyChanges { target: statusCluster; x: window.collapsedWidth + window.collapsedNotchRadius - 20 - window.collapsedClockWidth - 12 - 50; y: (window.collapsedHeight - statusCluster.height) / 2 }
+                },
+                State {
+                    name: "expanded"
+                    PropertyChanges { target: window; barWidth: window.expandedWidth; barHeight: window.expandedHeight; notchRadius: window.expandedNotchRadius; bottomRadius: window.expandedBottomRadius; clockFontSize: window.expandedClockSize; clockXScale: window.expandedClockXScale; clockYScale: window.expandedClockYScale; expandedContentOpacity: 1.0 }
+                    PropertyChanges { target: wsIndicator; x: window.expandedNotchRadius + 34; y: window.expandedHeight - 24 - wsIndicator.implicitHeight }
+                    PropertyChanges { target: clockDisplay; x: window.expandedNotchRadius + 34; y: 110 }
+                    PropertyChanges { target: statusCluster; x: (window.expandedNotchRadius + 34) + wsIndicator.width + 14; y: (window.expandedHeight - 24 - wsIndicator.implicitHeight) + (wsIndicator.height - statusCluster.height) / 2 }
+                }
+            ]
+
+            transitions: [
+                Transition {
+                    from: "collapsed"; to: "expanded"
+                    ParallelAnimation {
+                        NumberAnimation {
+                            targets: [window, wsIndicator, clockDisplay, statusCluster]
+                            properties: "barWidth,barHeight,notchRadius,bottomRadius,clockFontSize,clockXScale,clockYScale,x,y"
+                            duration: window.expandDuration
+                            easing.type: Easing.OutBack
+                            easing.overshoot: 1.08
+                        }
+                        SequentialAnimation {
+                            PauseAnimation { duration: 30 }
+                            NumberAnimation {
+                                target: window
+                                property: "expandedContentOpacity"
+                                duration: window.expandDuration - 30
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                    }
+                },
+                Transition {
+                    from: "expanded"; to: "collapsed"
+                    ParallelAnimation {
+                        NumberAnimation {
+                            targets: [window, wsIndicator, clockDisplay, statusCluster]
+                            properties: "barWidth,barHeight,notchRadius,bottomRadius,clockFontSize,clockXScale,clockYScale,x,y"
+                            duration: window.collapseDuration
+                            easing.type: Easing.OutCubic
+                        }
+                        NumberAnimation {
+                            target: window
+                            property: "expandedContentOpacity"
+                            duration: window.collapseDuration - 20
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
+            ]
+
             Canvas {
                 id: barCanvas
                 anchors.fill: parent
                 antialiasing: true
                 smooth: true
 
-                // Cache layer for performance
                 layer.enabled: true
                 layer.smooth: true
 
@@ -224,8 +212,6 @@ PanelWindow {
                 property real nr: window.notchRadius
                 property real r: window.bottomRadius
 
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
                 onWChanged: requestPaint()
                 onHChanged: requestPaint()
                 onNrChanged: requestPaint()
@@ -274,46 +260,20 @@ PanelWindow {
             Item {
                 id: collapsedContent
                 anchors.fill: parent
-                opacity: window.expanded ? 0 : 1
+                opacity: 1.0 - window.expandedContentOpacity
                 visible: opacity > 0.01
-
                 layer.enabled: true
-
-                Behavior on opacity {
-                    OpacityAnimator {
-                        duration: window.morphDuration * 0.4
-                        easing.type: Easing.OutCubic
-                    }
-                }
-
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.rightMargin: window.notchRadius + 20 + window.collapsedClockWidth + 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 2
-                    height: 12
-                    color: "#ffffff"
-                    opacity: 0.3
-                }
             }
 
             ExpandedPanel {
                 id: expandedPanel
                 anchors.fill: parent
-                fontFamily: ubuntuBold.name
+                fontFamily: "SF Pro Text"
                 notchRadius: window.notchRadius
 
-                opacity: window.expanded ? 1 : 0
+                opacity: window.expandedContentOpacity
                 visible: opacity > 0.01
-
                 layer.enabled: true
-
-                Behavior on opacity {
-                    OpacityAnimator {
-                        duration: window.morphDuration * 0.5
-                        easing.type: Easing.OutCubic
-                    }
-                }
             }
 
             WorkspaceIndicator {
@@ -322,71 +282,11 @@ PanelWindow {
                 ringSize: 16
                 ringBorder: 4
                 dotSpacing: 9
-
-                state: window.expanded ? "expanded" : "collapsed"
-
-                states: [
-                    State {
-                        name: "collapsed"
-                        PropertyChanges {
-                            target: wsIndicator
-                            x: window.collapsedNotchRadius + 20
-                            y: (window.collapsedHeight - wsIndicator.implicitHeight) / 2
-                        }
-                    },
-                    State {
-                        name: "expanded"
-                        PropertyChanges {
-                            target: wsIndicator
-                            x: window.expandedNotchRadius + 34
-                            y: window.expandedHeight - 24 - wsIndicator.implicitHeight
-                        }
-                    }
-                ]
-
-                transitions: Transition {
-                    NumberAnimation {
-                        properties: "x,y"
-                        duration: window.morphDuration
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: window.activeCurve
-                    }
-                }
             }
 
             Row {
                 id: clockDisplay
                 spacing: 1
-
-                state: window.expanded ? "expanded" : "collapsed"
-
-                states: [
-                    State {
-                        name: "collapsed"
-                        PropertyChanges {
-                            target: clockDisplay
-                            x: window.collapsedWidth + window.collapsedNotchRadius - 20 - window.collapsedClockWidth
-                            y: (window.collapsedHeight - window.collapsedClockHeight) / 2
-                        }
-                    },
-                    State {
-                        name: "expanded"
-                        PropertyChanges {
-                            target: clockDisplay
-                            x: window.expandedNotchRadius + 34
-                            y: window.expandedHeight / 2 - 16 - window.expandedClockHeight / 2
-                        }
-                    }
-                ]
-
-                transitions: Transition {
-                    NumberAnimation {
-                        properties: "x,y"
-                        duration: window.morphDuration
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: window.activeCurve
-                    }
-                }
 
                 transform: Scale {
                     origin.x: 0
@@ -397,10 +297,9 @@ PanelWindow {
 
                 Text {
                     id: clockTime
-                    anchors.bottom: parent.bottom
                     color: "#ffffff"
                     font.pixelSize: window.clockFontSize
-                    font.family: ubuntuBold.name
+                    font.family: sfProBold.name
                     font.weight: Font.Bold
                     font.features: { "tnum": 1 }
                     text: Qt.formatDateTime(clockTimer.now, "h:mm")
@@ -410,127 +309,95 @@ PanelWindow {
                     id: clockMeridiem
                     anchors.bottom: parent.bottom
                     color: "#ffffff"
-                    font.pixelSize: 9
-                    font.family: ubuntuBold.name
+                    font.pixelSize: window.clockFontSize
+                    font.family: sfProBold.name
                     font.weight: Font.Bold
                     font.capitalization: Font.AllUppercase
                     text: Qt.formatDateTime(clockTimer.now, "AP")
-
-                    opacity: window.expanded ? 0 : 1
-
-                    Behavior on opacity {
-                        OpacityAnimator {
-                            duration: window.morphDuration * 0.4
-                            easing.type: Easing.OutCubic
-                        }
-                    }
+                    
+                    // The expanded clock replaces the meridiem label.
+                    opacity: Math.max(0.0, 1.0 - (window.expandedContentOpacity * 2.0))
+                    visible: opacity > 0.01
                 }
             }
 
             Text {
                 id: clockDate
                 x: window.expandedNotchRadius + 34
-                y: (window.expandedHeight / 2 - 16 - window.expandedClockHeight / 2) - height - 10
+                y: window.expandedNotchRadius + 40
                 color: "#ffffff"
-                font.family: ubuntuBold.name
+                font.family: "SF Pro Display"
                 font.weight: Font.Bold
                 font.pixelSize: 18
                 font.capitalization: Font.AllUppercase
                 text: Qt.formatDateTime(clockTimer.now, "ddd, MMM d")
 
-                opacity: window.expanded ? 1 : 0
+                opacity: window.expandedContentOpacity
                 visible: opacity > 0.01
-                Behavior on opacity {
-                    OpacityAnimator {
-                        duration: window.morphDuration * 0.5
-                        easing.type: Easing.OutCubic
-                    }
-                }
             }
 
-            Row {
+            Item {
                 id: statusCluster
-                spacing: 10
+                width: statusRow.implicitWidth
+                height: statusRow.implicitHeight
 
-                state: window.expanded ? "expanded" : "collapsed"
+                Row {
+                    id: statusRow
+                    spacing: 10
 
-                states: [
-                    State {
-                        name: "collapsed"
-                        PropertyChanges {
-                            target: statusCluster
-                            x: window.collapsedWidth + window.collapsedNotchRadius - 20 - (window.collapsedClockWidth + 12) - 10
-                               - statusCluster.width + statusCluster.spacing + batteryPercent.width
-                            y: (window.collapsedHeight - statusCluster.height) / 2
-                        }
-                    },
-                    State {
-                        name: "expanded"
-                        PropertyChanges {
-                            target: statusCluster
-                            x: (window.expandedNotchRadius + 34) + wsIndicator.width + 14
-                            y: (window.expandedHeight - 24 - wsIndicator.implicitHeight) + (wsIndicator.height - statusCluster.height) / 2
-                        }
-                    }
-                ]
-
-                transitions: Transition {
-                    NumberAnimation {
-                        properties: "x,y"
-                        duration: window.morphDuration
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: window.activeCurve
-                    }
-                }
-
-                Text {
-                    id: wifiIcon
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: "#ffffff"
-                    font.pixelSize: 13
-                    font.family: fontAwesome.name
-                    font.weight: Font.Black
-                    text: "\uf1eb"
-                }
-
-                Text {
-                    id: batteryIcon
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: UPower.displayDevice.percentage <= 0.15 && UPower.displayDevice.state !== UPowerDeviceState.Charging ? "#ff5555" : "#ffffff"
-                    font.pixelSize: 18
-                    font.family: ubuntuBold.name
-                    font.weight: Font.Bold
-                    text: {
-                        var pct = UPower.displayDevice.percentage
-                        if (UPower.displayDevice.state === UPowerDeviceState.Charging) return "\uf0e7"
-                        if (pct >= 0.9) return "\uf240"
-                        if (pct >= 0.75) return "\uf241"
-                        if (pct >= 0.4) return "\uf242"
-                        if (pct >= 0.15) return "\uf243"
-                        return "\uf244"
+                    Text {
+                        id: wifiIcon
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "#ffffff"
+                        font.pixelSize: 13
+                        font.family: fontAwesome.name
+                        font.weight: Font.Black
+                        text: "\uf1eb"
                     }
 
-                    HoverHandler { id: batteryHover }
-                    ToolTip.visible: batteryHover.hovered && UPower.displayDevice.state === UPowerDeviceState.Charging
-                    ToolTip.text: "Charging"
-                }
-
-                Text {
-                    id: batteryPercent
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: "#ffffff"
-                    font.pixelSize: 11
-                    font.family: ubuntuBold.name
-                    font.features: { "tnum": 1 }
-                    text: Math.round(UPower.displayDevice.percentage * 100) + "%"
-
-                    opacity: window.expanded ? 1 : 0
-
-                    Behavior on opacity {
-                        OpacityAnimator {
-                            duration: window.morphDuration * 0.5
-                            easing.type: Easing.OutCubic
+                    Text {
+                        id: batteryIcon
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: UPower.displayDevice.percentage <= 0.15 && UPower.displayDevice.state !== UPowerDeviceState.Charging ? "#ff5555" : "#ffffff"
+                        font.pixelSize: 18
+                        font.family: ubuntuBold.name
+                        font.weight: Font.Bold
+                        text: {
+                            var pct = UPower.displayDevice.percentage
+                            if (UPower.displayDevice.state === UPowerDeviceState.Charging) return "\uf0e7"
+                            if (pct >= 0.9) return "\uf240"
+                            if (pct >= 0.75) return "\uf241"
+                            if (pct >= 0.4) return "\uf242"
+                            if (pct >= 0.15) return "\uf243"
+                            return "\uf244"
                         }
+
+                        HoverHandler { id: batteryHover }
+                        ToolTip.visible: batteryHover.hovered && UPower.displayDevice.state === UPowerDeviceState.Charging
+                        ToolTip.text: "Charging"
+                    }
+
+                    Text {
+                        id: batteryPercent
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "#ffffff"
+                        font.pixelSize: 11
+                        font.family: "SF Pro Text"
+                        font.weight: Font.Bold
+                        font.features: { "tnum": 1 }
+                        text: Math.round(UPower.displayDevice.percentage * 100) + "%"
+
+                        opacity: window.expandedContentOpacity
+                        visible: opacity > 0.01
+                    }
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 1
+                        height: 12
+                        color: "#ffffff"
+                        opacity: (1.0 - window.expandedContentOpacity) * 0.4
+                        visible: opacity > 0.01
                     }
                 }
             }

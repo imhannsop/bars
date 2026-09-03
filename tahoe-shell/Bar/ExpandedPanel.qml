@@ -7,74 +7,157 @@ Item {
 
     property string fontFamily: "Ubuntu Mono"
     property real notchRadius: 30
-    property int animDuration: 380
 
-    readonly property bool isExpanded: root.Window.window ? root.Window.window.expanded : true
+    readonly property bool isExpanded: root.Window?.window?.expanded ?? false
+    readonly property real animationProgress: root.Window?.window?.expandedContentOpacity ?? 0.0
 
     transform: Translate {
-        id: panelSlide
-        y: root.isExpanded ? 0 : -35
-
-        Behavior on y {
-            NumberAnimation {
-                duration: root.animDuration
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.32, 0.72, 0.0, 1.0, 1.0, 1.0]
-            }
-        }
+        y: (1.0 - root.animationProgress) * -12
     }
 
-    Item {
+    RowLayout {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
+        anchors.left: parent.left
         anchors.right: parent.right
         anchors.topMargin: root.notchRadius + 8
+        anchors.leftMargin: root.notchRadius + 34
         anchors.rightMargin: root.notchRadius + 24
         anchors.bottomMargin: 18
-        width: 350
+        spacing: 0
 
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 10
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
 
-            // Top controls
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 122
+        Item {
+            Layout.fillWidth: false
+            Layout.preferredWidth: 350
+            Layout.fillHeight: true
+            Layout.alignment: Qt.AlignRight
+
+            ColumnLayout {
+                anchors.fill: parent
                 spacing: 10
 
-                // Quick controls
-                ColumnLayout {
-                    Layout.preferredWidth: 122
-                    Layout.maximumWidth: 122
-                    Layout.fillHeight: true
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 122
                     spacing: 10
 
-                    // Wi-Fi button
-                    Rectangle {
+                    ColumnLayout {
                         Layout.preferredWidth: 122
-                        Layout.fillWidth: false
-                        Layout.preferredHeight: 56
-                        radius: height / 2
-                        color: "#222222"
+                        Layout.maximumWidth: 122
+                        Layout.fillHeight: true
+                        spacing: 10
+
+                        Rectangle {
+                            Layout.preferredWidth: 122
+                            Layout.fillWidth: false
+                            Layout.preferredHeight: 56
+                            radius: height / 2
+                            color: "#222222"
+
+                            RowLayout {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: 16
+                                spacing: 8
+
+                                Text {
+                                    text: "\uf1eb"
+                                    font.family: "Font Awesome 6 Free"
+                                    font.pixelSize: 14
+                                    color: "#ffffff"
+                                }
+
+                                Text {
+                                    text: "Wi-Fi"
+                                    font.family: root.fontFamily
+                                    font.pixelSize: 13
+                                    font.weight: Font.Bold
+                                    color: "#ffffff"
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                            }
+                        }
 
                         RowLayout {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.leftMargin: 16
-                            spacing: 8
+                            Layout.preferredWidth: 122
+                            Layout.preferredHeight: 56
+                            spacing: 10
+
+                            Rectangle {
+                                Layout.preferredWidth: 56
+                                Layout.preferredHeight: 56
+                                radius: 28
+                                color: "#222222"
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "\uf293"
+                                    font.family: "Font Awesome 6 Free"
+                                    font.pixelSize: 18
+                                    color: "#ffffff"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 56
+                                Layout.preferredHeight: 56
+                                radius: 28
+                                color: "#222222"
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "\uf186"
+                                    font.family: "Font Awesome 6 Free"
+                                    font.pixelSize: 16
+                                    color: "#ffffff"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        radius: 32
+                        color: "#222222"
+
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            spacing: 6
 
                             Text {
-                                text: "\uf1eb"
+                                Layout.alignment: Qt.AlignHCenter
+                                text: "\uf04b"
                                 font.family: "Font Awesome 6 Free"
-                                font.pixelSize: 14
+                                font.pixelSize: 18
                                 color: "#ffffff"
                             }
 
                             Text {
-                                text: "Wi-Fi"
+                                Layout.alignment: Qt.AlignHCenter
+                                text: "media\nplay"
+                                horizontalAlignment: Text.AlignHCenter
                                 font.family: root.fontFamily
-                                font.pixelSize: 13
+                                font.pixelSize: 12
                                 font.weight: Font.Bold
                                 color: "#ffffff"
                             }
@@ -85,198 +168,111 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                         }
                     }
-
-                    // Bluetooth & DND buttons
-                    RowLayout {
-                        Layout.preferredWidth: 122
-                        Layout.preferredHeight: 56
-                        spacing: 10
-
-                        // Bluetooth button
-                        Rectangle {
-                            Layout.preferredWidth: 56
-                            Layout.preferredHeight: 56
-                            radius: 28
-                            color: "#222222"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "\uf293"
-                                font.family: "Font Awesome 6 Free"
-                                font.pixelSize: 18
-                                color: "#ffffff"
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                            }
-                        }
-
-                        // Do Not Disturb button
-                        Rectangle {
-                            Layout.preferredWidth: 56
-                            Layout.preferredHeight: 56
-                            radius: 28
-                            color: "#222222"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "\uf186"
-                                font.family: "Font Awesome 6 Free"
-                                font.pixelSize: 16
-                                color: "#ffffff"
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                            }
-                        }
-                    }
                 }
 
-                // Media player card
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: 32
+                    Layout.preferredHeight: 54
+                    radius: height / 2
                     color: "#222222"
 
-                    ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: 6
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: parent.width * 0.96
+                        radius: parent.radius
+                        color: "#333333"
+                    }
 
-                        Text {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: "\uf04b"
-                            font.family: "Font Awesome 6 Free"
-                            font.pixelSize: 18
-                            color: "#ffffff"
+                    Item {
+                        anchors.fill: parent
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+
+                        RowLayout {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 8
+
+                            Text {
+                                text: "\uf185"
+                                font.family: "Font Awesome 6 Free"
+                                font.pixelSize: 14
+                                color: "#ffffff"
+                            }
+
+                            Text {
+                                text: "Brightness"
+                                font.family: root.fontFamily
+                                font.pixelSize: 13
+                                font.weight: Font.Bold
+                                color: "#ffffff"
+                            }
                         }
 
                         Text {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: "media\nplay"
-                            horizontalAlignment: Text.AlignHCenter
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "96%"
                             font.family: root.fontFamily
                             font.pixelSize: 12
                             font.weight: Font.Bold
                             color: "#ffffff"
                         }
                     }
+                }
 
-                    MouseArea {
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 54
+                    radius: height / 2
+                    color: "#222222"
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: parent.width * 0.69
+                        radius: parent.radius
+                        color: "#333333"
+                    }
+
+                    Item {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                    }
-                }
-            }
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
 
-            // Brightness slider
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 54
-                radius: height / 2
-                color: "#222222"
+                        RowLayout {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 8
 
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: parent.width * 0.96
-                    radius: parent.radius
-                    color: "#333333"
-                }
+                            Text {
+                                text: "\uf028"
+                                font.family: "Font Awesome 6 Free"
+                                font.pixelSize: 14
+                                color: "#ffffff"
+                            }
 
-                Item {
-                    anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.rightMargin: 18
-
-                    RowLayout {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 8
-
-                        Text {
-                            text: "\uf185"
-                            font.family: "Font Awesome 6 Free"
-                            font.pixelSize: 14
-                            color: "#ffffff"
+                            Text {
+                                text: "Sound"
+                                font.family: root.fontFamily
+                                font.pixelSize: 13
+                                font.weight: Font.Bold
+                                color: "#ffffff"
+                            }
                         }
 
                         Text {
-                            text: "Brightness"
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "69%"
                             font.family: root.fontFamily
-                            font.pixelSize: 13
+                            font.pixelSize: 12
                             font.weight: Font.Bold
                             color: "#ffffff"
                         }
-                    }
-
-                    Text {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "96%"
-                        font.family: root.fontFamily
-                        font.pixelSize: 12
-                        font.weight: Font.Bold
-                        color: "#ffffff"
-                    }
-                }
-            }
-
-            // Sound slider
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 54
-                radius: height / 2
-                color: "#222222"
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: parent.width * 0.69
-                    radius: parent.radius
-                    color: "#333333"
-                }
-
-                Item {
-                    anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.rightMargin: 18
-
-                    RowLayout {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 8
-
-                        Text {
-                            text: "\uf028"
-                            font.family: "Font Awesome 6 Free"
-                            font.pixelSize: 14
-                            color: "#ffffff"
-                        }
-
-                        Text {
-                            text: "Sound"
-                            font.family: root.fontFamily
-                            font.pixelSize: 13
-                            font.weight: Font.Bold
-                            color: "#ffffff"
-                        }
-                    }
-
-                    Text {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "69%"
-                        font.family: root.fontFamily
-                        font.pixelSize: 12
-                        font.weight: Font.Bold
-                        color: "#ffffff"
                     }
                 }
             }

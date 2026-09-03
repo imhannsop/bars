@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 
-// Spring-like slide animation
 PanelWindow {
     id: root
     screen: Quickshell.screens[0]
@@ -21,7 +20,7 @@ PanelWindow {
 
     property bool shown: false
 
-    // Bezier curve for slide animation
+    // Match Niri's easing for the overlay transition.
     readonly property var niriCurve: [0.05, 0.7, 0.1, 1.0, 1.0, 1.0]
     property int slideDuration: 220
 
@@ -42,7 +41,6 @@ PanelWindow {
             }
         }
 
-        // Content
         Rectangle {
             anchors.fill: parent
             color: "#0d0d0d"

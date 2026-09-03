@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 
-// Border overlay
 PanelWindow {
     id: screenBorder
     screen: Quickshell.screens[0]

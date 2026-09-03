@@ -14,7 +14,7 @@ Item {
     property color bgColor: "#000000"
     property int animDuration: 180
 
-    // Bezier curve for animations
+    // Match Niri's easing for workspace indicator motion.
     readonly property var niriCurve: [0.25, 1.0, 0.5, 1.0, 1.0, 1.0]
 
     property bool standalone: true
@@ -122,7 +122,6 @@ Item {
         }
     }
 
-    // Active workspace ring
     Rectangle {
         id: activeRing
         width: root.ringSize
@@ -139,7 +138,6 @@ Item {
            : 0
     }
 
-    // Animated inner circle
     Rectangle {
         id: maskDot
         width: root.ringSize - root.ringBorder * 2

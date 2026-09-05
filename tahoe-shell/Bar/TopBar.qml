@@ -9,7 +9,9 @@ PanelWindow {
     id: window
     screen: Quickshell.screens[0]
 
-    mask: Region { item: barArea }
+    mask: Region {
+        item: barArea
+    }
 
     readonly property bool fullscreenActive: ToplevelManager.activeToplevel !== null
                                              && ToplevelManager.activeToplevel.fullscreen
@@ -43,8 +45,8 @@ PanelWindow {
     property real collapsedNotchRadius: 20
     property real collapsedBottomRadius: 18
 
-    property real expandedWidth: 650
-    property real expandedHeight: 320
+    property real expandedWidth: 720
+    property real expandedHeight: 350
     property real expandedNotchRadius: 30
     property real expandedBottomRadius: 32
 
@@ -56,10 +58,10 @@ PanelWindow {
     property real expandedClockHeight: 136
 
     property real collapsedClockXScale: 1.0
-    property real expandedClockXScale: 0.64
+    property real expandedClockXScale: 0.70
 
     property real collapsedClockYScale: 1.0
-    property real expandedClockYScale: 1.8
+    property real expandedClockYScale: 1.6
 
     property real barWidth: collapsedWidth
     property real barHeight: collapsedHeight
@@ -82,11 +84,6 @@ PanelWindow {
     FontLoader {
         id: sfProBold
         source: "file:///home/ekoubu/.local/share/fonts/SFPro/SF-Pro-Display-Bold.otf"
-    }
-
-    FontLoader {
-        id: fontAwesome
-        source: "file:///usr/share/fonts/fontawesome/otfs/Font Awesome 6 Free-Solid-900.otf"
     }
 
     Item {
@@ -152,7 +149,7 @@ PanelWindow {
                     name: "expanded"
                     PropertyChanges { target: window; barWidth: window.expandedWidth; barHeight: window.expandedHeight; notchRadius: window.expandedNotchRadius; bottomRadius: window.expandedBottomRadius; clockFontSize: window.expandedClockSize; clockXScale: window.expandedClockXScale; clockYScale: window.expandedClockYScale; expandedContentOpacity: 1.0 }
                     PropertyChanges { target: wsIndicator; x: window.expandedNotchRadius + 34; y: window.expandedHeight - 24 - wsIndicator.implicitHeight }
-                    PropertyChanges { target: clockDisplay; x: window.expandedNotchRadius + 34; y: 110 }
+                    PropertyChanges { target: clockDisplay; x: window.expandedNotchRadius + 26; y: 110 }
                     PropertyChanges { target: statusCluster; x: (window.expandedNotchRadius + 34) + wsIndicator.width + 14; y: (window.expandedHeight - 24 - wsIndicator.implicitHeight) + (wsIndicator.height - statusCluster.height) / 2 }
                 }
             ]
@@ -268,7 +265,7 @@ PanelWindow {
             ExpandedPanel {
                 id: expandedPanel
                 anchors.fill: parent
-                fontFamily: "SF Pro Text"
+                fontFamily: sfProBold.name
                 notchRadius: window.notchRadius
 
                 opacity: window.expandedContentOpacity
@@ -296,13 +293,77 @@ PanelWindow {
                 }
 
                 Text {
-                    id: clockTime
+                    id: clockHours
                     color: "#ffffff"
                     font.pixelSize: window.clockFontSize
                     font.family: sfProBold.name
                     font.weight: Font.Bold
                     font.features: { "tnum": 1 }
-                    text: Qt.formatDateTime(clockTimer.now, "h:mm")
+                    text: Qt.formatDateTime(clockTimer.now, "hh")
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                Item {
+                    id: customColon
+                    // Added moderate padding (+8) so the dots have clean, balanced breathing room
+                    implicitWidth: dotWidth + (30 * window.expandedContentOpacity)
+                    height: clockHours.height
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    property real dotWidth: window.clockFontSize * 0.12
+                    property real dotHeight: dotWidth
+                    property real dotRadius: dotWidth / 2
+                    
+                    property real dotSpacing: (height * 0.20) * window.expandedContentOpacity + (1.8 * (1.0 - window.expandedContentOpacity))
+
+                    // Top Dot
+                    Rectangle {
+                        id: topDot
+                        width: customColon.dotWidth
+                        height: customColon.dotHeight
+                        radius: customColon.dotRadius
+                        color: "#ffffff"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: -customColon.dotSpacing
+
+                        transform: Scale {
+                            origin.x: topDot.width / 2
+                            origin.y: topDot.height / 2
+                            xScale: 1.0 / Math.max(0.01, window.clockXScale)
+                            yScale: 1.0 / Math.max(0.01, window.clockYScale)
+                        }
+                    }
+
+                    // Bottom Dot
+                    Rectangle {
+                        id: bottomDot
+                        width: customColon.dotWidth
+                        height: customColon.dotHeight
+                        radius: customColon.dotRadius
+                        color: "#ffffff"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: customColon.dotSpacing
+
+                        transform: Scale {
+                            origin.x: bottomDot.width / 2
+                            origin.y: bottomDot.height / 2
+                            xScale: 1.0 / Math.max(0.01, window.clockXScale)
+                            yScale: 1.0 / Math.max(0.01, window.clockYScale)
+                        }
+                    }
+                }
+
+                Text {
+                    id: clockMinutes
+                    color: "#ffffff"
+                    font.pixelSize: window.clockFontSize
+                    font.family: sfProBold.name
+                    font.weight: Font.Bold
+                    font.features: { "tnum": 1 }
+                    text: Qt.formatDateTime(clockTimer.now, "mm")
+                    verticalAlignment: Text.AlignVCenter
                 }
 
                 Text {
@@ -350,7 +411,7 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         color: "#ffffff"
                         font.pixelSize: 13
-                        font.family: fontAwesome.name
+                        font.family: "Font Awesome 6 Free"
                         font.weight: Font.Black
                         text: "\uf1eb"
                     }
@@ -360,7 +421,7 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         color: UPower.displayDevice.percentage <= 0.15 && UPower.displayDevice.state !== UPowerDeviceState.Charging ? "#ff5555" : "#ffffff"
                         font.pixelSize: 18
-                        font.family: ubuntuBold.name
+                        font.family: sfProBold.name
                         font.weight: Font.Bold
                         text: {
                             var pct = UPower.displayDevice.percentage

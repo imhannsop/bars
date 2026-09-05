@@ -25,4 +25,4 @@ i made this because i honestly like the UI of macOS Tahoe and also to design wha
 ![Overcast Bar](./tahoe-shell/images/nah-expand.jpg)
 
 ## Expanded ver
-![Overcast Bar](./tahoe-shell/images/yeh-expand.jpg)
+![Overcast Bar](./tahoe-shell/images/update.jpg)

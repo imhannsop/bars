@@ -1,0 +1,17 @@
+module Bar
+singleton Theme 1.0 Theme.qml
+AppLauncher 1.0 AppLauncher.qml
+AppSearch 1.0 AppSearch.qml
+DarkSurface 1.0 DarkSurface.qml
+ExpandedPanel 1.0 ExpandedPanel.qml
+FullScreenPanel 1.0 FullScreenPanel.qml
+MediaTile 1.0 MediaTile.qml
+NotificationCard 1.0 NotificationCard.qml
+OutputDevicePopup 1.0 OutputDevicePopup.qml
+PanelSlider 1.0 PanelSlider.qml
+ScreenBorder 1.0 ScreenBorder.qml
+ToggleTile 1.0 ToggleTile.qml
+TopBar 1.0 TopBar.qml
+WorkspaceIndicator 1.0 WorkspaceIndicator.qml
+ControlCenterPanel 1.0 ControlCenterPanel.qml
+ControlCenterPanel 1.0 ControlCenterPanel.qml

@@ -1,70 +1,61 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
+import "."
 
 Item {
     id: root
 
-    property string fontFamily: "SF Pro Display"
-    property string fontAwesomeFont: "Font Awesome 6 Free"
+    property string fontFamily: Theme.fontFamily
+    property string fontAwesomeFont: Theme.fontAwesomeFont
     property real notchRadius: 30
+    property int padding: 20
+    property int horizontalPadding: 16
+    property int outerPadding: 16
+
+    property int gap: 12
+    property int topRowHeight: 200
+    property int bottomPadding: padding
+
+    // handed in by TopBar
+    property var notifications: null
+    property bool autoDismissNotifications: false
+    property int notificationLifetime: 8000
+    // TopBar paints the date + clock and the workspace dots/battery over the left
+    // column, so the column only reserves their space and gives the rest to the
+    // notification tile. Both values come from the same metrics TopBar draws with.
+    property real clockBlockHeight: 117
+    property real sliderHeight: 55
+
+    signal notificationDismissed(int index)
+    signal notificationsCleared()
+    signal notificationActivated(int index)
+    readonly property int innerRadius: 16
+    readonly property int columnWidth: 464
 
     readonly property bool isExpanded: root.Window?.window?.expanded ?? false
     readonly property real animationProgress: root.Window?.window?.expandedContentOpacity ?? 0.0
-    readonly property bool selectorExpanded: outputSelector.expanded
     readonly property MprisPlayer activePlayer: Mpris.players.values[0] ?? null
+    readonly property bool playing: root.activePlayer?.playbackState === MprisPlaybackState.Playing
 
     readonly property PwNode defaultSink: Pipewire.defaultAudioSink
-    // audio is present as soon as the node is known to be an audio node, but
-    // its volume/muted values are invalid (and writes are dropped) until the
-    // node is actually bound via PwObjectTracker below — hence the `ready` check.
+    // Audio values are writable only after the node is tracked.
     readonly property bool audioReady: Pipewire.ready && !!root.defaultSink?.audio && !!root.defaultSink?.ready
     readonly property real volumeVal: root.audioReady
         ? Math.min(1.0, Math.max(0.0, root.defaultSink.audio.volume))
         : 0.0
     readonly property bool isMuted: root.audioReady ? root.defaultSink.audio.muted : false
 
-    // Every physical/virtual sink, not application streams. Deliberately NOT
-    // filtered on n.audio here: a node's .audio object only gets populated
-    // once it's bound via PwObjectTracker below, and PwObjectTracker only
-    // binds nodes it's given. Filtering on n.audio up front would make that
-    // a chicken-and-egg — a freshly connected device (e.g. Bluetooth
-    // headphones just paired) would never get bound, so .audio would never
-    // populate, so it would never pass the filter. Track everything so any
-    // active sink is bound (and thus shows up) as soon as PipeWire reports it.
-    readonly property var allSinkNodes: {
-        let list = []
-        for (const n of Pipewire.nodes.values) {
-            if (n.isSink && !n.isStream) list.push(n)
-        }
-        return list
-    }
-
-    // What the selector actually lists. Includes devices whose .audio hasn't
-    // finished binding yet (e.g. the instant a Bluetooth device connects) so
-    // they appear immediately rather than popping in a moment later.
-    readonly property var outputDevices: root.allSinkNodes
-
     PwObjectTracker {
-        // Track every sink (so newly-appearing devices get bound and their
-        // .audio populates) plus the current default sink explicitly, since
-        // it can briefly be a node not yet present in allSinkNodes while
-        // devices switch — that gap is what caused the volume slider/mute
-        // toggle to stop reaching pipewire before.
-        objects: root.defaultSink && !root.allSinkNodes.includes(root.defaultSink)
-            ? [...root.allSinkNodes, root.defaultSink]
-            : root.allSinkNodes
+        objects: root.defaultSink ? [root.defaultSink] : []
     }
 
     function updateAudioVolume(ratio) {
         if (!root.audioReady) return
-        const clamped = Math.min(1.0, Math.max(0.0, ratio))
-        root.defaultSink.audio.volume = clamped
+        root.defaultSink.audio.volume = Math.min(1.0, Math.max(0.0, ratio))
     }
 
     function toggleMute() {
@@ -72,38 +63,11 @@ Item {
         root.defaultSink.audio.muted = !root.defaultSink.audio.muted
     }
 
-    function setOutputDevice(node) {
-        // PipeWire may keep the old sink briefly while the switch completes.
-        Pipewire.preferredDefaultAudioSink = node
-    }
-
-    function rawDeviceLabel(node) {
-        if (!node) return "Unknown"
-        if (node.nickname && node.nickname.length > 0) return node.nickname
-        if (node.description && node.description.length > 0) return node.description
-        return node.name ?? "Unknown Device"
-    }
-
-    // How many currently-listed devices share each raw label, so
-    // deviceLabel() below can tell duplicates apart.
-    readonly property var deviceLabelCounts: {
-        let counts = {}
-        for (const n of root.outputDevices) {
-            const label = root.rawDeviceLabel(n)
-            counts[label] = (counts[label] || 0) + 1
-        }
-        return counts
-    }
-
-    function deviceLabel(node) {
-        if (!node) return "Unknown"
-        const label = root.rawDeviceLabel(node)
-        // node.name is the underlying PipeWire object name, always unique -
-        // use it to disambiguate when two devices render the same label.
-        if ((root.deviceLabelCounts[label] || 0) > 1 && node.name) {
-            return `${label} (${node.name})`
-        }
-        return label
+    function volumeGlyph() {
+        if (root.isMuted) return ""
+        if (root.volumeVal <= 0) return ""
+        if (root.volumeVal < 0.5) return ""
+        return ""
     }
 
     function getArtistString(player) {
@@ -116,24 +80,48 @@ Item {
         return "Unknown Artist"
     }
 
-    // Wi-Fi
+    function formatTime(seconds) {
+        const s = isFinite(seconds) && seconds > 0 ? seconds : 0
+        const sec = Math.floor(s % 60)
+        return Math.floor(s / 60) + ":" + (sec < 10 ? "0" : "") + sec
+    }
+
+    function refresh() {
+        wifiReadProc.running = true
+        wifiSsidProc.running = true
+        btReadProc.running = true
+        btDeviceProc.running = true
+        nightReadProc.running = true
+        if (maxBrightnessProc.maxVal > 0) brightnessReadProc.running = true
+    }
+
     property bool wifiActive: false
+    property string wifiSsid: ""
     Process {
         id: wifiReadProc
         command: ["nmcli", "radio", "wifi"]
         stdout: SplitParser {
             onRead: data => root.wifiActive = (data.trim() === "enabled")
         }
-        Component.onCompleted: running = true
+    }
+    Process {
+        id: wifiSsidProc
+        command: ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const line = text.split("\n").find(l => l.startsWith("yes:"))
+                root.wifiSsid = line ? line.slice(4).replace(/\\:/g, ":") : ""
+            }
+        }
     }
     Process {
         id: wifiToggleProc
         command: ["nmcli", "radio", "wifi", root.wifiActive ? "off" : "on"]
-        onExited: wifiReadProc.running = true
+        onExited: root.refresh()
     }
 
-    // Bluetooth
     property bool bluetoothActive: false
+    property string btDevice: ""
     Process {
         id: btReadProc
         command: ["bluetoothctl", "show"]
@@ -143,41 +131,54 @@ Item {
                 else if (data.indexOf("Powered: no") !== -1) root.bluetoothActive = false
             }
         }
-        Component.onCompleted: running = true
+    }
+    Process {
+        id: btDeviceProc
+        command: ["sh", "-c", "bluetoothctl devices Connected 2>/dev/null | head -n1 | cut -d' ' -f3-"]
+        stdout: StdioCollector {
+            onStreamFinished: root.btDevice = text.trim()
+        }
     }
     Process {
         id: btToggleProc
         command: ["bluetoothctl", "power", root.bluetoothActive ? "off" : "on"]
-        onExited: btReadProc.running = true
+        onExited: root.refresh()
     }
 
-    // Do not disturb
+    // Focus belongs to the bar now: TopBar owns the flag and uses it to mute the notch pop-up,
+    // so there is no mako/dunst to query. The tile just reports clicks.
     property bool dndActive: false
+    signal dndToggleRequested()
+
+    property bool nightActive: false
+    property bool nightAvailable: true
     Process {
-        id: dndReadProc
-        command: ["sh", "-c", "if command -v makoctl >/dev/null 2>&1; then exec makoctl mode; elif command -v dunstctl >/dev/null 2>&1; then exec dunstctl is-paused; fi"]
-        stdout: SplitParser {
-            onRead: data => root.dndActive = data.indexOf("do-not-disturb") !== -1 || data.trim() === "true"
+        id: nightReadProc
+        command: ["sh", "-c", "command -v gammastep >/dev/null || { echo missing; exit; }; pgrep -x gammastep >/dev/null && echo on || echo off"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const state = text.trim()
+                root.nightAvailable = state !== "missing"
+                root.nightActive = state === "on"
+            }
         }
-        Component.onCompleted: running = true
     }
     Process {
-        id: dndToggleProc
-        command: ["sh", "-c", "if command -v makoctl >/dev/null 2>&1; then exec makoctl mode -t do-not-disturb; elif command -v dunstctl >/dev/null 2>&1; then exec dunstctl set-paused toggle; fi"]
-        onExited: dndReadProc.running = true
+        id: nightToggleProc
+        command: ["sh", "-c", root.nightActive ? "pkill -x gammastep" : "setsid -f gammastep -O 4000 >/dev/null 2>&1"]
+        onExited: nightReadProc.running = true
     }
 
-    // Brightness
     property real brightnessPercent: 1.0
+    property int brightnessTarget: 100
     Process {
         id: brightnessReadProc
         command: ["brightnessctl", "g"]
         stdout: SplitParser {
             onRead: data => {
-                let current = parseFloat(data)
-                if (!isNaN(current) && maxBrightnessProc.maxVal > 0) {
-                    root.brightnessPercent = Math.min(1.0, Math.max(0.0, current / maxBrightnessProc.maxVal))
-                }
+                const current = parseFloat(data)
+                if (isNaN(current) || maxBrightnessProc.maxVal <= 0 || brightnessSlider.dragging) return
+                root.brightnessPercent = Math.min(1.0, Math.max(0.0, current / maxBrightnessProc.maxVal))
             }
         }
     }
@@ -187,7 +188,7 @@ Item {
         command: ["brightnessctl", "m"]
         stdout: SplitParser {
             onRead: data => {
-                let m = parseFloat(data)
+                const m = parseFloat(data)
                 if (!isNaN(m) && m > 0) {
                     maxBrightnessProc.maxVal = m
                     brightnessReadProc.running = true
@@ -198,611 +199,228 @@ Item {
     }
     Process {
         id: setBrightnessProc
-        property string targetValue: "100%"
-        command: ["brightnessctl", "set", targetValue]
+        property int applied: -1
+        command: ["brightnessctl", "set", root.brightnessTarget + "%"]
+        // a drag can outrun the process, so rerun once if the target moved meanwhile
+        onExited: {
+            if (applied !== root.brightnessTarget) {
+                applied = root.brightnessTarget
+                running = true
+            }
+        }
     }
 
     function updateBrightness(ratio) {
-        root.brightnessPercent = Math.min(1.0, Math.max(0.0, ratio))
-        let pct = Math.round(root.brightnessPercent * 100)
-        setBrightnessProc.targetValue = pct + "%"
-        setBrightnessProc.running = true
+        // 0% blacks the panel out on most laptops
+        root.brightnessPercent = Math.min(1.0, Math.max(0.01, ratio))
+        root.brightnessTarget = Math.round(root.brightnessPercent * 100)
+        if (!setBrightnessProc.running) {
+            setBrightnessProc.applied = root.brightnessTarget
+            setBrightnessProc.running = true
+        }
     }
 
     Timer {
         interval: 2000
-        running: true
+        running: root.isExpanded
         repeat: true
-        onTriggered: {
-            wifiReadProc.running = true
-            btReadProc.running = true
-            dndReadProc.running = true
-            if (maxBrightnessProc.maxVal > 0) brightnessReadProc.running = true
+        onTriggered: root.refresh()
+    }
+
+    // MPRIS position doesn't tick on its own
+    Timer {
+        interval: 1000
+        running: root.isExpanded && root.playing
+        repeat: true
+        onTriggered: root.activePlayer.positionChanged()
+    }
+
+    Connections {
+        target: root
+        function onIsExpandedChanged() {
+            if (root.isExpanded) root.refresh()
         }
     }
 
-    transform: Translate {
-        y: (1.0 - root.animationProgress) * -12
-
-        Behavior on y {
-            NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
-        }
-    }
+    Component.onCompleted: root.refresh()
 
     RowLayout {
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.topMargin: root.notchRadius + 8
-        anchors.leftMargin: root.notchRadius + 34
-        anchors.rightMargin: root.notchRadius + 24
-        anchors.bottomMargin: 18
+        id: mainLayout
+        anchors.fill: parent
+        anchors.topMargin: root.padding + root.outerPadding
+        anchors.bottomMargin: root.bottomPadding + root.outerPadding
+        anchors.leftMargin: root.notchRadius + root.padding + root.horizontalPadding + root.outerPadding
+        anchors.rightMargin: root.notchRadius + root.padding + root.horizontalPadding + root.outerPadding
         spacing: 0
 
+        // LEFT COLUMN
+        // The date + clock (top) and the workspace dots + battery (bottom) are painted
+        // by TopBar so they can morph with the collapsed bar. This column just keeps
+        // their space free, which makes the notification tile run exactly from the
+        // clock's baseline gap down to the bottom edge of the volume slider.
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-        }
-
-        Item {
-            Layout.fillWidth: false
-            Layout.preferredWidth: 400
-            Layout.maximumWidth: 400
-            Layout.fillHeight: true
-            Layout.alignment: Qt.AlignRight
-            clip: false
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 0
+                anchors.rightMargin: root.gap
+                spacing: root.gap
 
-                // Toggles and media controls
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: root.clockBlockHeight
+                }
+
+                NotificationCard {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    fontFamily: root.fontFamily
+                    fontAwesomeFont: root.fontAwesomeFont
+                    model: root.notifications
+                    autoDismiss: root.autoDismissNotifications
+                    lifetime: root.notificationLifetime
+                    onDismissRequested: index => root.notificationDismissed(index)
+                    onClearRequested: root.notificationsCleared()
+                    onActivated: index => root.notificationActivated(index)
+                }
+
+            }
+        }
+
+        // RIGHT COLUMN: Toggle Tiles, Media Player, Sliders
+        Item {
+            Layout.preferredWidth: root.columnWidth
+            Layout.maximumWidth: root.columnWidth
+            Layout.fillHeight: true
+            Layout.alignment: Qt.AlignRight
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: root.gap
+
+                // Toggle Tiles Grid
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 122
-                    Layout.maximumHeight: 122
-                    spacing: 10
+                    Layout.preferredHeight: root.topRowHeight
+                    Layout.maximumHeight: root.topRowHeight
+                    spacing: root.gap
 
-                    ColumnLayout {
-                        Layout.preferredWidth: 165
-                        Layout.maximumWidth: 165
+                    GridLayout {
+                        Layout.preferredWidth: 236
+                        Layout.maximumWidth: 236
                         Layout.fillHeight: true
-                        spacing: 10
+                        columns: 2
+                        rowSpacing: root.gap
+                        columnSpacing: root.gap
 
-                        // Wi-Fi toggle
-                        Rectangle {
+                        // Import and use ToggleTile component
+                        ToggleTile {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 60
-                            radius: 15
-                            
-                            // Background: Solid white when active, dark grey (#222222) when inactive
-                            color: root.wifiActive ? "#ffffff" : "#222222"
-
-                            Behavior on color { ColorAnimation { duration: 150 } }
-
-                            RowLayout {
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.leftMargin: 22
-                                spacing: 12
-
-                                Text {
-                                    text: "\uf1eb"
-                                    font.family: root.fontAwesomeFont
-                                    font.pixelSize: 22
-                                    // Swaps to black (#000000) when active
-                                    color: root.wifiActive ? "#000000" : "#888888"
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-
-                                Text {
-                                    text: "Wi-Fi"
-                                    font.family: root.fontFamily
-                                    font.pixelSize: 16
-                                    font.weight: Font.Bold
-                                    // Swaps to black (#000000) when active
-                                    color: root.wifiActive ? "#000000" : "#888888"
-                                    Layout.alignment: Qt.AlignVCenter
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: wifiToggleProc.running = true
-                            }
+                            Layout.fillHeight: true
+                            fontFamily: root.fontFamily
+                            fontAwesomeFont: root.fontAwesomeFont
+                            glyph: ""
+                            label: "Wi-Fi"
+                            status: root.wifiActive ? (root.wifiSsid || "On") : "Off"
+                            active: root.wifiActive
+                            onClicked: wifiToggleProc.running = true
                         }
 
-                       // Bluetooth and do-not-disturb toggles
-                        RowLayout {
+                        ToggleTile {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 60
-                            spacing: 10
+                            Layout.fillHeight: true
+                            fontFamily: root.fontFamily
+                            fontAwesomeFont: root.fontAwesomeFont
+                            glyph: ""
+                            label: "Bluetooth"
+                            status: root.bluetoothActive ? (root.btDevice || "On") : "Off"
+                            active: root.bluetoothActive
+                            onClicked: btToggleProc.running = true
+                        }
 
-                            // Bluetooth Toggle
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 60
-                                radius: 15
-                                color: root.bluetoothActive ? "#ffffff" : "#222222"
+                        ToggleTile {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            fontFamily: root.fontFamily
+                            fontAwesomeFont: root.fontAwesomeFont
+                            glyph: ""
+                            label: "Focus"
+                            status: root.dndActive ? "On" : "Off"
+                            active: root.dndActive
+                            onClicked: root.dndToggleRequested()
+                        }
 
-                                Behavior on color { ColorAnimation { duration: 150 } }
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "\uf294"
-                                    font.family: root.fontAwesomeFont
-                                    font.pixelSize: 22
-                                    color: root.bluetoothActive ? "#000000" : "#888888"
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: btToggleProc.running = true
-                                }
-                            }
-
-                            // Do Not Disturb Toggle
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 60
-                                radius: 15
-                                color: root.dndActive ? "#ffffff" : "#222222"
-
-                                Behavior on color { ColorAnimation { duration: 150 } }
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "\uf186"
-                                    font.family: root.fontAwesomeFont
-                                    font.pixelSize: 22
-                                    color: root.dndActive ? "#000000" : "#888888"
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: dndToggleProc.running = true
-                                }
-                            }
+                        ToggleTile {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            fontFamily: root.fontFamily
+                            fontAwesomeFont: root.fontAwesomeFont
+                            glyph: ""
+                            label: "Night Light"
+                            status: !root.nightAvailable ? "Not installed" : root.nightActive ? "On" : "Off"
+                            active: root.nightActive
+                            available: root.nightAvailable
+                            onClicked: nightToggleProc.running = true
                         }
                     }
 
-                    // Media player
-                    Rectangle {
-                        id: mediaCard
+                    MediaTile {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        radius: 15
-                        color: "#222222"
-                        clip: true
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 20
-                            spacing: 8
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                spacing: 14
-
-                                // Square album art, sized to fill the
-                                // card's height (matches the reference:
-                                // the art dominates the left side).
-                                Rectangle {
-                                    id: albumArtBg
-                                    Layout.fillHeight: true
-                                    Layout.preferredWidth: albumArtBg.height
-                                    radius: 14
-                                    color: "#3a3a3a"
-                                    clip: true
-
-                                    Image {
-                                        id: albumArt
-                                        anchors.fill: parent
-                                        
-                                        // Convert local file paths or URLs provided by MPRIS to valid QML Image sources
-                                        source: {
-                                            let url = root.activePlayer?.artUrl ?? ""
-                                            if (!url) return ""
-                                            // Handle local paths without file:// protocol prefix
-                                            if (url.startsWith("/")) return "file://" + url
-                                            return url
-                                        }
-                                        
-                                        fillMode: Image.PreserveAspectCrop
-                                        asynchronous: true  // Prevents UI stutters when downloading album art
-                                        cache: false         // Forces refresh when playing a new track with the same filename/URL
-                                        visible: status === Image.Ready && source != ""
-                                    }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "\uf001"
-                                        font.family: root.fontAwesomeFont
-                                        font.pixelSize: 22
-                                        color: "#666666"
-                                        visible: !albumArt.visible
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    spacing: 4
-
-                                    Text {
-                                        Layout.fillWidth: true
-                                        Layout.topMargin: 8
-                                        text: root.activePlayer?.trackTitle || "Not Playing"
-                                        font.family: root.fontFamily
-                                        font.pixelSize: 13
-                                        font.weight: Font.Medium
-                                        color: "#ffffff"
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: root.getArtistString(root.activePlayer)
-                                        font.family: root.fontFamily
-                                        font.pixelSize: 11
-                                        color: "#aaaaaa"
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Item { Layout.fillHeight: true }
-
-                                    RowLayout {
-                                        Layout.alignment: Qt.AlignLeft
-                                        spacing: 16
-
-                                        Text {
-                                            text: "\uf048"
-                                            font.family: root.fontAwesomeFont
-                                            font.pixelSize: 13
-                                            color: root.activePlayer?.canGoPrevious ? "#ffffff" : "#555555"
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: root.activePlayer?.canGoPrevious ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                onClicked: if (root.activePlayer && root.activePlayer.canGoPrevious) root.activePlayer.previous()
-                                            }
-                                        }
-
-                                        Text {
-                                            text: (root.activePlayer && root.activePlayer.playbackState === MprisPlaybackState.Playing) ? "\uf04c" : "\uf04b"
-                                            font.family: root.fontAwesomeFont
-                                            font.pixelSize: 16
-                                            color: root.activePlayer ? "#ffffff" : "#555555"
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: root.activePlayer ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                onClicked: if (root.activePlayer) root.activePlayer.togglePlaying()
-                                            }
-                                        }
-
-                                        Text {
-                                            text: "\uf051"
-                                            font.family: root.fontAwesomeFont
-                                            font.pixelSize: 13
-                                            color: root.activePlayer?.canGoNext ? "#ffffff" : "#555555"
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: root.activePlayer?.canGoNext ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                onClicked: if (root.activePlayer && root.activePlayer.canGoNext) root.activePlayer.next()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Progress bar spans the full card width,
-                            // under both the art and the text/controls —
-                            // matching the reference layout.
-                            Item {
-                                id: progressContainer
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 10
-
-                                readonly property real progressRatio: {
-                                    if (!root.activePlayer || root.activePlayer.length <= 0) return 0.0
-                                    return Math.min(1.0, Math.max(0.0, root.activePlayer.position / root.activePlayer.length))
-                                }
-
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: 4
-                                    radius: 2
-                                    color: "#333333"
-
-                                    Rectangle {
-                                        width: parent.width * progressContainer.progressRatio
-                                        height: parent.height
-                                        radius: parent.radius
-                                        color: "#ffffff"
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: (mouse) => {
-                                        if (root.activePlayer && root.activePlayer.length > 0) {
-                                            root.activePlayer.position = (mouse.x / width) * root.activePlayer.length
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Output device selector state. The visible trigger is now
-                // a small circular chevron button embedded at the end of
-                // the volume pill below (id: outputDeviceButton) — this
-                // Item just owns the expand/collapse state and keeps the
-                // floating popup wired up regardless of where its trigger
-                // lives in the layout.
-                Item {
-                    id: outputSelector
-                    visible: false
-                    Layout.preferredWidth: 0
-                    Layout.preferredHeight: 0
-
-                    property bool expanded: false
-                    readonly property bool hasChoices: root.outputDevices.length > 1
-
-                    // Collapse automatically whenever the panel itself
-                    // collapses, so it never reopens already-expanded.
-                    Connections {
-                        target: root
-                        function onIsExpandedChanged() {
-                            if (!root.isExpanded) outputSelector.expanded = false
-                        }
-                    }
-
-                    // Open/close the floating popup window in step with
-                    // `expanded`. The popup is a real top-level surface now
-                    // (see OutputDevicePopup.qml) — no layout here can clip
-                    // or squeeze it regardless of how it's driven.
-                    onExpandedChanged: {
-                        if (expanded) outputDevicePopup.open()
-                        else outputDevicePopup.close()
-                    }
-
-                    // The device list is a fully separate top-level popup
-                    // surface — see OutputDevicePopup.qml. It renders
-                    // outside this Item, this ColumnLayout, and this panel
-                    // entirely, so no ancestor layout can ever clip or
-                    // squeeze it again.
-                    OutputDevicePopup {
-                        id: outputDevicePopup
-
-                        // --- pass-through: parent -> popup ---
-                        anchorItem: outputDeviceButton
-                        parentWindow: root.Window?.window ?? null
-                        devices: root.outputDevices
-                        currentSink: root.defaultSink
-                        labelForNode: root.deviceLabel
                         fontFamily: root.fontFamily
                         fontAwesomeFont: root.fontAwesomeFont
+                        innerRadius: root.innerRadius
 
-                        // --- pass-through: popup -> parent ---
-                        onDeviceChosen: (node) => {
-                            root.setOutputDevice(node)
-                            outputSelector.expanded = false
-                        }
-                        onDismissed: outputSelector.expanded = false
-                    }
-                }
+                        hasPlayer: root.activePlayer !== null
+                        playing: root.playing
+                        title: root.activePlayer?.trackTitle || "Not Playing"
+                        artist: root.activePlayer ? root.getArtistString(root.activePlayer) : ""
+                        artUrl: root.activePlayer?.trackArtUrl ?? ""
+                        position: root.activePlayer?.positionSupported ? root.activePlayer.position : 0
+                        length: root.activePlayer?.lengthSupported ? root.activePlayer.length : 0
+                        canPrevious: root.activePlayer?.canGoPrevious ?? false
+                        canNext: root.activePlayer?.canGoNext ?? false
+                        canTogglePlaying: root.activePlayer?.canTogglePlaying ?? false
+                        canSeek: (root.activePlayer?.canSeek ?? false) && (root.activePlayer?.positionSupported ?? false)
 
-                // Volume
-                Rectangle {
-                    id: soundPill
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 60
-                    radius: 15
-                    color: "#1e1e22"
-                    clip: true
-
-                    function volumeIconGlyph() {
-                        if (root.isMuted || root.volumeVal <= 0) return "\uf026"
-                        if (root.volumeVal < 0.5) return "\uf027"
-                        return "\uf028"
-                    }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 20
-                        anchors.rightMargin: 14
-                        spacing: 16
-
-                        Text {
-                            text: soundPill.volumeIconGlyph()
-                            font.family: root.fontAwesomeFont
-                            font.pixelSize: 22
-                            color: root.isMuted ? "#55555a" : "#ffffff"
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        // Track + thumb
-                        Item {
-                            id: soundSliderTrack
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                height: 4
-                                radius: 2
-                                color: "#3a3a40"
-                            }
-
-                            Rectangle {
-                                id: soundThumb
-                                width: 22; height: 22; radius: 11
-                                color: "#ffffff"
-                                y: (soundSliderTrack.height - height) / 2
-                                x: Math.max(0, Math.min(soundSliderTrack.width - width,
-                                    soundSliderTrack.width * root.volumeVal - width / 2))
-
-                                Behavior on x {
-                                    enabled: !soundDragArea.pressed
-                                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                                }
-                            }
-
-                            MouseArea {
-                                id: soundDragArea
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                acceptedButtons: Qt.LeftButton
-                                function setVolume(mouseX) {
-                                    root.updateAudioVolume(mouseX / width)
-                                }
-                                onPressed: (mouse) => setVolume(mouse.x)
-                                onPositionChanged: (mouse) => {
-                                    if (pressed) setVolume(mouse.x)
-                                }
-                                onClicked: (mouse) => setVolume(mouse.x)
-                                onWheel: (wheel) => {
-                                    if (!root.audioReady) return
-                                    const step = wheel.angleDelta.y > 0 ? 0.05 : -0.05
-                                    root.updateAudioVolume(root.volumeVal + step)
-                                }
-                            }
-                        }
-
-                        // Decorative "loud" reference icon
-                        Text {
-                            text: "\uf028"
-                            font.family: root.fontAwesomeFont
-                            font.pixelSize: 20
-                            color: "#ffffff"
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        // Output device dropdown trigger
-                        Rectangle {
-                            id: outputDeviceButton
-                            visible: root.outputDevices.length > 0
-                            Layout.preferredWidth: 22
-                            Layout.preferredHeight: 22
-                            Layout.alignment: Qt.AlignVCenter
-                            radius: 100
-                            color: outputDeviceButtonArea.containsMouse ? "#E6E6E6" : "#ffffff"
-
-                            Behavior on color { ColorAnimation { duration: 150 } }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "\uf0d7" // FontAwesome icon for angle-right (>)
-                                font.family: root.fontAwesomeFont
-                                font.pixelSize: 11
-                                color: "#000000"
-                                
-                                // Rotates 90 degrees when expanded so it points downward 
-                                rotation: outputSelector.expanded ? -90 : 0
-                                transformOrigin: Item.Center
-
-                                Behavior on rotation {
-                                    NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-                                }
-                            }
-
-                            MouseArea {
-                                id: outputDeviceButtonArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: outputSelector.hasChoices ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                enabled: outputSelector.hasChoices
-                                onClicked: outputSelector.expanded = !outputSelector.expanded
-                            }
+                        onPreviousClicked: root.activePlayer.previous()
+                        onNextClicked: root.activePlayer.next()
+                        onPlayPauseClicked: root.activePlayer.togglePlaying()
+                        onSeekRequested: ratio => {
+                            if (root.activePlayer && root.activePlayer.lengthSupported)
+                                root.activePlayer.position = ratio * root.activePlayer.length
                         }
                     }
                 }
 
-
-                // Brightness
-                Rectangle {
-                    id: brightnessTrack
+                // Volume Slider
+                PanelSlider {
+                    id: soundSlider
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
-                    radius: 15
-                    color: "#1e1e22"
-                    clip: true
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: root.sliderHeight
+                    fontFamily: root.fontFamily
+                    fontAwesomeFont: root.fontAwesomeFont
+                    glyph: root.volumeGlyph()
+                    glyphClickable: true
+                    dim: root.isMuted
+                    value: root.volumeVal
+                    onMoved: ratio => root.updateAudioVolume(ratio)
+                    onGlyphClicked: root.toggleMute()
+                }
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 20
-                        anchors.rightMargin: 20
-                        spacing: 16
-
-                        Rectangle {
-                            width: 22
-                            height: 22
-                            radius: 15
-                            color: "transparent"
-                            border.color: "#ffffff"
-                            border.width: 3
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        Item {
-                            id: brightnessSliderTrack
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                height: 4
-                                radius: 2
-                                color: "#3a3a40"
-                            }
-
-                            Rectangle {
-                                id: brightnessThumb
-                                width: 22; height: 22; radius: 11
-                                color: "#ffffff"
-                                y: (brightnessSliderTrack.height - height) / 2
-                                x: Math.max(0, Math.min(brightnessSliderTrack.width - width,
-                                    brightnessSliderTrack.width * root.brightnessPercent - width / 2))
-
-                                Behavior on x {
-                                    enabled: !brightnessDragArea.pressed
-                                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                                }
-                            }
-
-                            MouseArea {
-                                id: brightnessDragArea
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onPositionChanged: (mouse) => root.updateBrightness(mouse.x / width)
-                                onClicked: (mouse) => root.updateBrightness(mouse.x / width)
-                            }
-                        }
-
-                        Text {
-                            text: "\uf042"
-                            font.family: root.fontAwesomeFont
-                            font.pixelSize: 22
-                            color: "#ffffff"
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
+                // Brightness Slider
+                PanelSlider {
+                    id: brightnessSlider
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: root.sliderHeight
+                    fontFamily: root.fontFamily
+                    fontAwesomeFont: root.fontAwesomeFont
+                    glyph: ""
+                    value: root.brightnessPercent
+                    onMoved: ratio => root.updateBrightness(ratio)
                 }
             }
         }

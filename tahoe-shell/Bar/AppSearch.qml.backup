@@ -1,0 +1,203 @@
+import QtQuick
+import QtQuick.Controls
+import Quickshell
+import Quickshell.Io
+
+Item {
+    id: root
+
+    signal requestClose()
+    signal requestToggle()
+    property string fontFamily: "SF Pro Display"
+    property string fontAwesomeFont: "Font Awesome 6 Free"
+    property var apps: []
+    property string query: ""
+
+    function refreshResults() {
+        let needle = query.trim().toLowerCase()
+        results = needle.length === 0
+            ? apps.slice(0, 8)
+            : apps.filter(app => app.name.toLowerCase().indexOf(needle) !== -1).slice(0, 8)
+    }
+
+    property var results: []
+
+    function launch(app) {
+        if (!app || !app.exec) return
+        launcher.command = ["/bin/sh", "-c", app.exec]
+        launcher.running = true
+        searchField.text = ""
+        searchField.focus = false
+        root.requestClose()
+    }
+
+    function reset() {
+        searchField.text = ""
+        searchField.focus = false
+    }
+
+    function focusSearch() {
+        searchField.forceActiveFocus()
+    }
+
+    Process {
+        id: appReader
+        command: ["/bin/sh", "-c",
+            "find \"$HOME/.local/share/applications\" /usr/share/applications /var/lib/flatpak/exports/share/applications \"$HOME/.local/share/flatpak/exports/share/applications\" -type f -name '*.desktop' 2>/dev/null | sort -u | while IFS= read -r f; do " +
+            "name=$(grep -m1 '^Name=' \"$f\" | cut -d= -f2-); exec=$(grep -m1 '^Exec=' \"$f\" | cut -d= -f2-); icon=$(grep -m1 '^Icon=' \"$f\" | cut -d= -f2-); " +
+            "hidden=$(grep -m1 '^NoDisplay=' \"$f\" | cut -d= -f2-); case \"$hidden\" in true|True|1) continue;; esac; " +
+            "[ -n \"$name\" ] && [ -n \"$exec\" ] && printf '%s\\t%s\\t%s\\n' \"$name\" \"$icon\" \"$exec\"; done"]
+        stdout: SplitParser {
+            onRead: data => {
+                let fields = data.split("\t")
+                if (fields.length < 3) return
+                root.apps.push({
+                    name: fields[0].trim(),
+                    icon: fields[1].trim(),
+                    exec: fields.slice(2).join("\t")
+                        .replace(/%[fFuUdDnNickvm]/g, "")
+                        .trim()
+                })
+            }
+        }
+        onExited: {
+            root.apps.sort((a, b) => a.name.localeCompare(b.name))
+            root.refreshResults()
+        }
+        Component.onCompleted: running = true
+    }
+
+    Process { id: launcher }
+
+    Column {
+        anchors.fill: parent
+        spacing: 10
+
+        Text {
+            text: "Applications"
+            color: "#ffffff"
+            font.family: root.fontFamily
+            font.pixelSize: 18
+            font.weight: Font.Bold
+        }
+
+        Rectangle {
+            id: searchBox
+            width: parent.width
+            height: 42
+            radius: 14
+            color: "#25252a"
+            border.width: searchField.activeFocus ? 1 : 0
+            border.color: "#ffffff"
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                text: "\uf002"
+                color: "#a7a7ad"
+                font.family: root.fontAwesomeFont
+                font.pixelSize: 15
+            }
+
+            TextField {
+                id: searchField
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: 40
+                anchors.rightMargin: 10
+                height: parent.height
+                placeholderText: "Search apps"
+                color: "#ffffff"
+                placeholderTextColor: "#8c8c92"
+                font.family: root.fontFamily
+                font.pixelSize: 14
+                background: null
+                selectByMouse: true
+                onTextChanged: {
+                    root.query = text
+                    root.refreshResults()
+                }
+                Keys.onReturnPressed: if (root.results.length > 0) root.launch(root.results[0])
+                Keys.onEscapePressed: {
+                    text = ""
+                    focus = false
+                    root.requestClose()
+                }
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_D &&
+                            (event.modifiers & Qt.MetaModifier)) {
+                        root.requestToggle()
+                        event.accepted = true
+                    }
+                }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                z: -1
+                onClicked: searchField.forceActiveFocus()
+            }
+        }
+
+        ListView {
+            id: appList
+            width: parent.width
+            height: parent.height - y
+            clip: true
+            spacing: 6
+            model: root.results
+
+            delegate: Rectangle {
+                required property var modelData
+                width: appList.width
+                height: 42
+                radius: 12
+                color: appMouse.containsMouse ? "#ffffff" : "#222226"
+
+                Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 8
+                    spacing: 10
+
+                    Rectangle {
+                        width: 26
+                        height: 26
+                        radius: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: appMouse.containsMouse ? "#eeeeee" : "#38383e"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.name.charAt(0).toUpperCase()
+                            color: appMouse.containsMouse ? "#111111" : "#ffffff"
+                            font.family: root.fontFamily
+                            font.pixelSize: 14
+                            font.weight: Font.Bold
+                        }
+                    }
+
+                    Text {
+                        width: parent.width - 48
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.name
+                        color: appMouse.containsMouse ? "#111111" : "#ffffff"
+                        font.family: root.fontFamily
+                        font.pixelSize: 13
+                        elide: Text.ElideRight
+                    }
+                }
+
+                MouseArea {
+                    id: appMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.launch(modelData)
+                }
+            }
+        }
+    }
+}

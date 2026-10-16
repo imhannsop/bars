@@ -9,9 +9,6 @@ A collection of custom desktop bars and UI components I've built as personal exp
 designed to provide quick access to essential information and actions.
 
 ## Preview
-
-https://github.com/user-attachments/assets/a5f1be51-cdbf-4eaa-8904-fc6ab913242d
-
 ![Overcast Bar](./overcast/screenshots/bar.jpg)
 
 > Overcast is primarily a personal project and an ongoing experiment in desktop interface design.
@@ -23,12 +20,7 @@ https://github.com/user-attachments/assets/a5f1be51-cdbf-4eaa-8904-fc6ab913242d
 i made this because i honestly like the UI of macOS Tahoe and also to design what tahoe must be (base on my opinion btw).
 
 ## Preview
-
-https://github.com/imhannsop/bars/raw/main/tahoe-shell/images/prev.mp4
-
-<video src="./tahoe-shell/images/prev.mp4" controls="controls" width="100%"></video>
-
-[▶ Watch Preview Video (prev.mp4)](./tahoe-shell/images/prev.mp4)
+https://github.com/user-attachments/assets/a5f1be51-cdbf-4eaa-8904-fc6ab913242d
 
 ## Screenshots
 

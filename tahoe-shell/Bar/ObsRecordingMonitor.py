@@ -76,8 +76,8 @@ def receive_frame(connection):
             return json.loads(payload.decode("utf-8"))
 
 
-def emit(event, active):
-    print(json.dumps({"event": event, "active": active}), flush=True)
+def emit(event, active, paused=False):
+    print(json.dumps({"event": event, "active": active, "paused": paused}), flush=True)
 
 
 def emit_audio(level):
@@ -95,7 +95,7 @@ def recording_audio_level(event_data):
     return level
 
 
-def connect(config, stop_recording=False):
+def connect(config, action=None):
     port = int(config.get("server_port", 4455))
     with socket.create_connection(("127.0.0.1", port), timeout=3) as connection:
         connection.settimeout(None)
@@ -142,7 +142,7 @@ def connect(config, stop_recording=False):
                 hashlib.sha256((secret + auth_data["challenge"]).encode("utf-8")).digest()
             ).decode("ascii")
 
-        subscriptions = 64 if stop_recording else 64 | 65536
+        subscriptions = 64 if action else 64 | 65536
         identify = {"rpcVersion": 1, "eventSubscriptions": subscriptions}
         if auth:
             identify["authentication"] = auth
@@ -151,14 +151,15 @@ def connect(config, stop_recording=False):
         initialized = False
         requested = False
         last_active = None
+        last_paused = None
         last_audio_emit = 0.0
         while True:
             message = receive_frame(connection)
             opcode = message.get("op")
             data = message.get("d", {})
             if opcode == 2 and not requested:
-                request_type = "StopRecord" if stop_recording else "GetRecordStatus"
-                request_id = "quickshell-obs-stop-recording" if stop_recording else "quickshell-obs-record-status"
+                request_type = action or "GetRecordStatus"
+                request_id = f"quickshell-obs-{request_type.lower()}"
                 send_frame(
                     connection,
                     0x1,
@@ -172,12 +173,15 @@ def connect(config, stop_recording=False):
                 )
                 requested = True
             elif opcode == 5 and data.get("eventType") == "RecordStateChanged":
-                active = bool(data.get("eventData", {}).get("outputActive"))
-                if initialized and active != last_active:
-                    emit("recording", active)
+                event_data = data.get("eventData", {})
+                active = bool(event_data.get("outputActive"))
+                paused = bool(event_data.get("outputPaused"))
+                if initialized and (active != last_active or paused != last_paused):
+                    emit("recording", active, paused)
                 last_active = active
+                last_paused = paused
             elif opcode == 5 and data.get("eventType") == "InputVolumeMeters":
-                if initialized and last_active:
+                if initialized and last_active and not last_paused:
                     now = time.monotonic()
                     if now - last_audio_emit >= 1 / 30:
                         emit_audio(recording_audio_level(data.get("eventData", {})))
@@ -185,36 +189,44 @@ def connect(config, stop_recording=False):
             elif (
                 opcode == 7
                 and data.get("requestId") == (
-                    "quickshell-obs-stop-recording" if stop_recording else "quickshell-obs-record-status"
+                    f"quickshell-obs-{(action or 'GetRecordStatus').lower()}"
                 )
             ):
-                if stop_recording:
+                if action:
                     if not data.get("requestStatus", {}).get("result"):
-                        comment = data.get("requestStatus", {}).get("comment", "OBS rejected StopRecord")
+                        comment = data.get("requestStatus", {}).get("comment", f"OBS rejected {action}")
                         raise ConnectionError(str(comment))
                     return
                 if not data.get("requestStatus", {}).get("result"):
                     raise ConnectionError(data.get("requestStatus", {}).get("comment", "OBS rejected GetRecordStatus"))
                 active = bool(data.get("responseData", {}).get("outputActive"))
+                paused = bool(data.get("responseData", {}).get("outputPaused"))
                 if not initialized:
-                    emit("state", active)
+                    emit("state", active, paused)
                     initialized = True
-                elif active != last_active:
-                    emit("recording", active)
+                elif active != last_active or paused != last_paused:
+                    emit("recording", active, paused)
                 last_active = active
+                last_paused = paused
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "--stop":
+    action_types = {
+        "--stop": "StopRecord",
+        "--pause": "PauseRecord",
+        "--resume": "ResumeRecord",
+    }
+    action = action_types.get(sys.argv[1]) if len(sys.argv) > 1 else None
+    if action:
         config = load_config()
         if not config or not config.get("server_enabled", False):
             print("OBS WebSocket server is not enabled", file=sys.stderr, flush=True)
             return 1
         try:
-            connect(config, stop_recording=True)
+            connect(config, action=action)
             return 0
         except (ConnectionError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
-            print(f"Unable to stop OBS recording: {error}", file=sys.stderr, flush=True)
+            print(f"Unable to {action.lower()} on OBS: {error}", file=sys.stderr, flush=True)
             return 1
 
     last_error = None

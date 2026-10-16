@@ -4,7 +4,7 @@ import QtQuick
 import Quickshell
 
 QtObject {
-    readonly property string fontFamily: "Hurmit Nerd Font"
+    readonly property string fontFamily: "Adwaita Sans"
     readonly property string fontAwesomeFont: "Font Awesome 6 Free"
 
     readonly property var title: ({

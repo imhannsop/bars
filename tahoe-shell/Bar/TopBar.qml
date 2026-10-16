@@ -34,6 +34,30 @@ PanelWindow {
         ]
     }
 
+    Process {
+        id: obsPauseProcess
+        command: [
+            "python3",
+            decodeURIComponent(Qt.resolvedUrl("ObsRecordingMonitor.py").toString().replace(/^file:\/\//, "")),
+            "--pause"
+        ]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) window.obsPausePending = false
+        }
+    }
+
+    Process {
+        id: obsResumeProcess
+        command: [
+            "python3",
+            decodeURIComponent(Qt.resolvedUrl("ObsRecordingMonitor.py").toString().replace(/^file:\/\//, "")),
+            "--resume"
+        ]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) window.obsPausePending = false
+        }
+    }
+
     readonly property bool fullscreenActive: ToplevelManager.activeToplevel !== null
                                              && ToplevelManager.activeToplevel.fullscreen
 
@@ -55,7 +79,6 @@ PanelWindow {
     }
 
     onExpandedChanged: {
-        // the panel already lists every notification, so the pop-up gets out of the way
         if (window.expanded) {
             if (window.appSearchOpen) window.appSearchCloseRequested()
             window.peeking = false
@@ -94,19 +117,19 @@ PanelWindow {
     signal appSearchToggleRequested()
 
     property int expandDuration: 260
-    property int collapseDuration: 200
+    property int collapseDuration: 300
 
     property real collapsedWidth: 460
     property real collapsedHeight: 35
     property real collapsedNotchRadius: 20
     property real collapsedBottomRadius: 18
 
-    // portrait control-center card: the bar row stays on top, the grid sits underneath
-    property real expandedWidth: 560
+    property real expandedWidth: 430
     property real expandedHeaderHeight: expandedOuterPadding
     property real expandedHeight: expandedHeaderHeight + controlCenter.implicitHeight + expandedFooterHeight
     property real expandedNotchRadius: 30
     property real expandedOuterPadding: 24
+    property real expandedPanelSidePadding: 20
     property real expandedFooterHeight: 50
     property real expandedRowInset: 8
     property real expandedGap: 16
@@ -145,27 +168,25 @@ PanelWindow {
     property real expandedContentScale: 0.92
     readonly property real expansionOvershootMargin: 0.12
 
-    // ---- notch pop-up: the bar grows downward to show a new notification ----------
     property bool peeking: false
-    property bool doNotDisturb: false       // driven by the Focus tile
+    property bool doNotDisturb: false
     property int peekDuration: 5000
     property real peekWidth: 520
     property real peekHeight: 92
     property real recordingPeekWidth: 420
     property real recordingPeekHeight: 72
     property real peekBottomRadius: 24
-    property int peekOpenDuration: 360
-    property int peekCloseDuration: 300
+    property int peekOpenDuration: 400
+    property int peekCloseDuration: 340
     property real peekContentOpacity: 0.0
     property real peekContentScale: 0.88
     property real peekBorderAlpha: 0.12
-    property real peekChipScale: 0.5        // icon chip springs in first
-    property real peekTextShift: 16         // text glides in from the right
+    property real peekChipScale: 0.5
+    property real peekTextShift: 16
     property real searchWidth: 560
     property real searchContentOpacity: 0.0
     property real searchContentScale: 0.9
     readonly property var niriCurve: [0.05, 0.7, 0.1, 1.0, 1.0, 1.0]
-    // The normal bar row fades out fast as the notch opens and returns softly after it closes.
     property real barRowOpacity: ((window.peeking || window.appSearchOpen || window.searchClosing) && !window.expanded) ? 0.0 : 1.0
     Behavior on barRowOpacity {
         NumberAnimation {
@@ -188,20 +209,23 @@ PanelWindow {
     property string peekMessage: ""
     property string peekApp: ""
     property string peekIcon: ""
-    property real peekIconRadius: 23        // 23 = full circle, ~12 = rounded square
+    property real peekIconRadius: 23
     property string peekType: "info"
+    readonly property real activePeekWidth: peekType === "recording" ? recordingPeekWidth : peekWidth
     property color peekAccent: "#d0d0d6"
     property bool obsRecordingActive: false
+    property bool obsRecordingPaused: false
     property bool obsStopPending: false
+    property bool obsPausePending: false
     property real obsAudioLevel: 0.0
     property double obsRecordingStartedAt: 0
     property int obsRecordingElapsedSeconds: 0
 
     readonly property real maxNotchRadius: Math.max(collapsedNotchRadius, expandedNotchRadius)
+    readonly property real maxBarWidth: Math.max(collapsedWidth, expandedWidth, peekWidth, recordingPeekWidth, searchWidth)
 
-    // Reserve transparent shell space for the OutBack peak so it doesn't clip.
-    implicitWidth: expandedWidth + maxNotchRadius * 2
-                  + Math.max(0, expandedWidth - collapsedWidth) * expansionOvershootMargin
+    implicitWidth: maxBarWidth + maxNotchRadius * 2
+                  + Math.max(0, maxBarWidth - collapsedWidth) * expansionOvershootMargin
                   + 2 * Math.max(0, expandedNotchRadius - collapsedNotchRadius) * expansionOvershootMargin
     implicitHeight: expandedHeight
                    + Math.max(0, expandedHeight - collapsedHeight) * expansionOvershootMargin
@@ -209,8 +233,6 @@ PanelWindow {
     color: "transparent"
     exclusiveZone: 30
 
-    // ---- notifications ---------------------------------------------------------
-    // Lives on the window (not on barArea) so window.addNotification() & co. resolve.
     QtObject {
         id: notificationTheme
         readonly property color panel: "#1e1e22"
@@ -257,8 +279,6 @@ PanelWindow {
         return ""
     }
 
-    // Picks the best icon for a notification: the image it carries (Firefox puts the website's
-    // icon here), then its app icon, then the icon of its .desktop entry. "" when nothing resolves.
     function resolvePeekIcon(notification) {
         function toSource(v) {
             if (!v) return ""
@@ -291,7 +311,6 @@ PanelWindow {
     function showPeek(notification) {
         if (window.expanded || window.appSearchOpen || window.fullscreenActive) return
         var type = notificationType(notification)
-        // Focus mutes the pop-up, but critical notifications still break through
         if (window.doNotDisturb && type !== "error" && notification.peekType !== "recording") return
 
         var wasPeeking = window.peeking
@@ -305,7 +324,6 @@ PanelWindow {
         window.peeking = true
         if (wasPeeking) swapPop.restart()
 
-        // hovering the notch keeps it open; the countdown starts once the cursor leaves
         if (barHover.hovered) peekTimer.stop()
         else peekTimer.restart()
     }
@@ -345,15 +363,32 @@ PanelWindow {
 
         if (message.event !== "state" && message.event !== "recording") return
         const active = Boolean(message.active)
-        if (active === window.obsRecordingActive) return
+        const paused = active && Boolean(message.paused)
+        if (active === window.obsRecordingActive) {
+            if (active && paused !== window.obsRecordingPaused) {
+                if (paused) {
+                    window.obsRecordingElapsedSeconds = Math.floor((Date.now() - window.obsRecordingStartedAt) / 1000)
+                    window.obsAudioLevel = 0
+                } else {
+                    window.obsRecordingStartedAt = Date.now() - window.obsRecordingElapsedSeconds * 1000
+                }
+                window.obsRecordingPaused = paused
+                window.obsPausePending = false
+            }
+            return
+        }
         window.obsRecordingActive = active
         if (active) {
             window.obsRecordingStartedAt = Date.now()
             window.obsRecordingElapsedSeconds = 0
+            window.obsRecordingPaused = paused
             window.obsStopPending = false
+            window.obsPausePending = false
         } else {
             window.obsAudioLevel = 0
+            window.obsRecordingPaused = false
             window.obsStopPending = false
+            window.obsPausePending = false
         }
         window.showObsRecordingPeek(active)
     }
@@ -362,7 +397,6 @@ PanelWindow {
         NumberAnimation { duration: 55; easing.type: Easing.OutCubic }
     }
 
-    // announce is true only for notifications that just arrived, not ones restored at startup
     function addNotification(notification, announce) {
         if (!notification) return
         for (var i = 0; i < notificationModel.count; i++) {
@@ -380,12 +414,11 @@ PanelWindow {
         if (announce) window.showPeek(notification)
     }
 
-    // a new notification replacing the one on screen: soft re-pop on the same niri-style curves
     ParallelAnimation {
         id: swapPop
-        NumberAnimation { target: window; property: "peekContentScale"; from: 0.94; to: 1.0; duration: 460; easing.type: Easing.OutExpo }
-        NumberAnimation { target: window; property: "peekContentOpacity"; from: 0.4; to: 1.0; duration: 240; easing.type: Easing.OutCubic }
-        NumberAnimation { target: window; property: "peekTextShift"; from: 12; to: 0; duration: 460; easing.type: Easing.OutExpo }
+        NumberAnimation { target: window; property: "peekContentScale"; from: 0.96; to: 1.0; duration: 340; easing.type: Easing.OutCubic }
+        NumberAnimation { target: window; property: "peekContentOpacity"; from: 0.2; to: 1.0; duration: 280; easing.type: Easing.OutCubic }
+        NumberAnimation { target: window; property: "peekTextShift"; from: 6; to: 0; duration: 340; easing.type: Easing.OutCubic }
     }
 
     Timer {
@@ -396,7 +429,7 @@ PanelWindow {
 
     Timer {
         interval: 250
-        running: window.obsRecordingActive
+        running: window.obsRecordingActive && !window.obsRecordingPaused
         repeat: true
         onTriggered: {
             window.obsRecordingElapsedSeconds = Math.floor((Date.now() - window.obsRecordingStartedAt) / 1000)
@@ -411,7 +444,7 @@ PanelWindow {
         to: Math.PI * 2
         duration: 1300
         loops: Animation.Infinite
-        running: window.obsRecordingActive
+        running: window.obsRecordingActive && !window.obsRecordingPaused
     }
 
     Item {
@@ -436,6 +469,13 @@ PanelWindow {
         recordingStopAnimation.restart()
     }
 
+    function requestObsRecordingPause() {
+        if (window.obsPausePending || window.obsStopPending) return
+        window.obsPausePending = true
+        if (window.obsRecordingPaused) obsResumeProcess.running = true
+        else obsPauseProcess.running = true
+    }
+
     SequentialAnimation {
         id: recordingStopAnimation
         PauseAnimation { duration: 170 }
@@ -458,8 +498,6 @@ PanelWindow {
     NotificationServer {
         id: notificationServer
         persistenceSupported: true
-        // Firefox checks the server's capabilities before sending web notifications;
-        // advertise the common ones so it doesn't treat the server as unusable.
         bodySupported: true
         actionsSupported: true
         imageSupported: true
@@ -480,18 +518,15 @@ PanelWindow {
         }
     }
 
-    // ---- control center backends ---------------------------------------------------
     property bool wifiOn: true
     property bool bluetoothOn: true
     property bool hotspotOn: false
     property bool darkMode: true
     property real brightness: 0.5
 
-    // keeps the default sink's volume live
     PwObjectTracker { objects: [Pipewire.defaultAudioSink] }
     readonly property var audioSink: Pipewire.defaultAudioSink
 
-    // prefer whichever player is playing, else the first one
     readonly property var mediaPlayer: {
         var list = Mpris.players.values
         var fallback = null
@@ -502,7 +537,6 @@ PanelWindow {
         return fallback
     }
 
-    // shortcut buttons; edit these to match your setup (empty list = does nothing)
     readonly property var actionCommands: ({
         "launcher": ["fuzzel"],
         "overview": ["niri", "msg", "action", "toggle-overview"],
@@ -534,7 +568,6 @@ PanelWindow {
         onTriggered: Quickshell.execDetached(["brightnessctl", "-q", "set", Math.round(window.brightness * 100) + "%"])
     }
 
-    // re-read the real brightness each time the panel opens
     Connections {
         target: window
         function onExpandedChanged() {
@@ -606,7 +639,6 @@ PanelWindow {
                 event.accepted = true
             }
 
-            // Keep geometry and child positions in sync.
             states: [
                 State {
                     name: "collapsed"
@@ -617,11 +649,10 @@ PanelWindow {
                 },
                 State {
                     name: "peek"
-                    // same top row as the collapsed bar, just wider and taller
-                    PropertyChanges { target: window; barWidth: window.peekType === "recording" ? window.recordingPeekWidth : window.peekWidth; barHeight: window.peekType === "recording" ? window.recordingPeekHeight : window.peekHeight; notchRadius: window.collapsedNotchRadius; bottomRadius: window.peekBottomRadius; clockFontSize: window.collapsedClockSize; clockXScale: window.collapsedClockXScale; clockYScale: window.collapsedClockYScale; expandedContentOpacity: 0.0; peekContentOpacity: 1.0; peekContentScale: 1.0; peekChipScale: 1.0; peekTextShift: 0 }
+                    PropertyChanges { target: window; barWidth: window.activePeekWidth; barHeight: window.peekType === "recording" ? window.recordingPeekHeight : window.peekHeight; notchRadius: window.collapsedNotchRadius; bottomRadius: window.peekBottomRadius; clockFontSize: window.collapsedClockSize; clockXScale: window.collapsedClockXScale; clockYScale: window.collapsedClockYScale; expandedContentOpacity: 0.0; peekContentOpacity: 1.0; peekContentScale: 1.0; peekChipScale: 1.0; peekTextShift: 0 }
                     PropertyChanges { target: wsIndicator; x: window.collapsedNotchRadius + 20; y: (window.collapsedHeight - wsIndicator.implicitHeight) / 2 }
-                    PropertyChanges { target: clockDisplay; x: window.peekWidth + window.collapsedNotchRadius - 20 - window.collapsedClockWidth; y: (window.collapsedHeight - window.collapsedClockHeight) / 2 }
-                    PropertyChanges { target: statusCluster; rightEdge: window.peekWidth + window.collapsedNotchRadius - 20 - window.collapsedClockWidth - 12; y: (window.collapsedHeight - statusCluster.height) / 2 }
+                    PropertyChanges { target: clockDisplay; x: window.activePeekWidth + window.collapsedNotchRadius - 20 - window.collapsedClockWidth; y: (window.collapsedHeight - window.collapsedClockHeight) / 2 }
+                    PropertyChanges { target: statusCluster; rightEdge: window.activePeekWidth + window.collapsedNotchRadius - 20 - window.collapsedClockWidth - 12; y: (window.collapsedHeight - statusCluster.height) / 2 }
                 },
                 State {
                     name: "search"
@@ -633,7 +664,6 @@ PanelWindow {
                 State {
                     name: "expanded"
                     PropertyChanges { target: window; barWidth: window.expandedWidth; barHeight: window.expandedHeight; notchRadius: window.expandedNotchRadius; bottomRadius: window.expandedBottomRadius; clockFontSize: window.expandedClockSize; clockXScale: window.expandedClockXScale; clockYScale: window.expandedClockYScale; expandedContentOpacity: 1.0; expandedContentScale: 1.0; peekContentOpacity: 0.0; peekContentScale: 0.88; peekChipScale: 0.5; peekTextShift: 16; searchContentOpacity: 0.0; searchContentScale: 0.9 }
-                    // same top row as the collapsed bar, spread across the wider card
                     PropertyChanges { target: wsIndicator; x: window.expandedNotchRadius + window.expandedOuterPadding + window.expandedRowInset; y: window.expandedHeaderHeight + controlCenter.implicitHeight + window.expandedFooterHeight / 2 - wsIndicator.implicitHeight / 2 }
                     PropertyChanges { target: clockDisplay; x: window.expandedNotchRadius + window.expandedOuterPadding + window.expandedRowInset + wsIndicator.implicitWidth + 14; y: window.expandedHeaderHeight + controlCenter.implicitHeight + window.expandedFooterHeight / 2 - window.collapsedClockHeight / 2 }
                     PropertyChanges { target: statusCluster; rightEdge: window.expandedNotchRadius + window.expandedWidth - window.expandedOuterPadding - window.expandedRowInset; y: window.expandedHeaderHeight + controlCenter.implicitHeight + window.expandedFooterHeight / 2 - statusCluster.height / 2 }
@@ -752,23 +782,22 @@ PanelWindow {
                         }
                     }
                 },
-                // A slower ease-in-out gives the notch a fluid, deliberate morph.
                 Transition {
                     to: "peek"
                     ParallelAnimation {
-                        NumberAnimation { target: window; property: "barWidth"; duration: window.peekOpenDuration; easing.type: Easing.InOutCubic }
-                        NumberAnimation { target: window; property: "barHeight"; duration: window.peekOpenDuration; easing.type: Easing.InOutCubic }
-                        NumberAnimation { target: window; properties: "notchRadius,bottomRadius"; duration: window.peekOpenDuration; easing.type: Easing.InOutCubic }
-                        NumberAnimation { targets: [wsIndicator, clockDisplay, statusCluster]; properties: "x,y,rightEdge"; duration: window.peekOpenDuration; easing.type: Easing.InOutCubic }
+                        NumberAnimation { target: window; property: "barWidth"; duration: window.peekOpenDuration; easing.type: Easing.OutCubic }
+                        NumberAnimation { target: window; property: "barHeight"; duration: window.peekOpenDuration; easing.type: Easing.OutCubic }
+                        NumberAnimation { target: window; properties: "notchRadius,bottomRadius"; duration: window.peekOpenDuration; easing.type: Easing.OutCubic }
+                        NumberAnimation { targets: [wsIndicator, clockDisplay, statusCluster]; properties: "x,y,rightEdge"; duration: window.peekOpenDuration; easing.type: Easing.OutCubic }
 
-                        // Reveal the content just after the shape starts opening.
                         SequentialAnimation {
                             PauseAnimation { duration: 80 }
-                            NumberAnimation { target: window; property: "peekContentOpacity"; duration: 240; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: window; property: "peekContentOpacity"; duration: 300; easing.type: Easing.OutCubic }
                         }
                         SequentialAnimation {
                             PauseAnimation { duration: 80 }
-                            NumberAnimation { target: window; property: "peekContentScale"; duration: 300; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: window; property: "peekContentScale"; to: 1.02; duration: 210; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: window; property: "peekContentScale"; to: 1.0; duration: 150; easing.type: Easing.InOutCubic }
                         }
                         SequentialAnimation {
                             PauseAnimation { duration: 110 }
@@ -780,7 +809,6 @@ PanelWindow {
                         }
                     }
                 },
-                // Keep the content and notch moving together through the close.
                 Transition {
                     from: "peek"; to: "collapsed"
                     ParallelAnimation {
@@ -788,39 +816,39 @@ PanelWindow {
                             target: window
                             properties: "barWidth,barHeight,notchRadius,bottomRadius"
                             duration: window.peekCloseDuration
-                            easing.type: Easing.InOutCubic
+                            easing.type: Easing.InCubic
                         }
                         NumberAnimation {
                             targets: [wsIndicator, clockDisplay, statusCluster]
                             properties: "x,y,rightEdge"
                             duration: window.peekCloseDuration
-                            easing.type: Easing.InOutCubic
+                            easing.type: Easing.InCubic
                         }
                         NumberAnimation {
                             target: window
                             properties: "peekContentOpacity,peekContentScale,peekChipScale,peekTextShift"
                             duration: window.peekCloseDuration
-                            easing.type: Easing.InOutCubic
+                            easing.type: Easing.InCubic
                         }
                     }
                 },
                 Transition {
                     from: "expanded"; to: "collapsed"
-                    SequentialAnimation {
+                    ParallelAnimation {
                         ParallelAnimation {
                             NumberAnimation {
                                 target: window
                                 property: "expandedContentOpacity"
                                 to: 0.0
-                                duration: 80
-                                easing.type: Easing.InQuad
+                                duration: 150
+                                easing.type: Easing.InCubic
                             }
                             NumberAnimation {
                                 target: window
                                 property: "expandedContentScale"
                                 to: 0.92
-                                duration: 80
-                                easing.type: Easing.InQuad
+                                duration: 180
+                                easing.type: Easing.InCubic
                             }
                         }
                         ParallelAnimation {
@@ -828,13 +856,13 @@ PanelWindow {
                                 target: window
                                 properties: "barWidth,barHeight,notchRadius,bottomRadius"
                                 duration: window.collapseDuration
-                                easing.type: Easing.OutCubic
+                                easing.type: Easing.InOutCubic
                             }
                             NumberAnimation {
                                 targets: [window, wsIndicator, clockDisplay, statusCluster]
                                 properties: "clockFontSize,clockXScale,clockYScale,x,y,rightEdge"
                                 duration: window.collapseDuration
-                                easing.type: Easing.OutCubic
+                                easing.type: Easing.InOutCubic
                             }
                         }
                     }
@@ -871,33 +899,34 @@ PanelWindow {
                     ctx.reset()
 
                     var ox = (width - w) / 2
+                    var topRadius = Math.min(nr, h / 2)
+                    var bottomRadius = Math.min(r, Math.max(0, h - topRadius))
 
                     ctx.beginPath()
-                    ctx.moveTo(ox - nr, 0)
-                    ctx.lineTo(ox + w + nr, 0)
-                    ctx.arcTo(ox + w, 0, ox + w, nr, nr)
-                    ctx.lineTo(ox + w, h - r)
-                    ctx.arcTo(ox + w, h, ox + w - r, h, r)
-                    ctx.lineTo(ox + r, h)
-                    ctx.arcTo(ox, h, ox, h - r, r)
-                    ctx.lineTo(ox, nr)
-                    ctx.arcTo(ox, 0, ox - nr, 0, nr)
+                    ctx.moveTo(ox - topRadius, 0)
+                    ctx.lineTo(ox + w + topRadius, 0)
+                    ctx.arcTo(ox + w, 0, ox + w, topRadius, topRadius)
+                    ctx.lineTo(ox + w, h - bottomRadius)
+                    ctx.arcTo(ox + w, h, ox + w - bottomRadius, h, bottomRadius)
+                    ctx.lineTo(ox + bottomRadius, h)
+                    ctx.arcTo(ox, h, ox, h - bottomRadius, bottomRadius)
+                    ctx.lineTo(ox, topRadius)
+                    ctx.arcTo(ox, 0, ox - topRadius, 0, topRadius)
                     ctx.closePath()
 
                     ctx.fillStyle = "#000000"
                     ctx.fill()
 
-                    // 1px inner highlight (2px stroke clipped to the shape), notification only
                     if (ba > 0.002) {
                         ctx.save()
                         ctx.clip()
                         ctx.beginPath()
-                        ctx.moveTo(ox + w, nr)
-                        ctx.lineTo(ox + w, h - r)
-                        ctx.arcTo(ox + w, h, ox + w - r, h, r)
-                        ctx.lineTo(ox + r, h)
-                        ctx.arcTo(ox, h, ox, h - r, r)
-                        ctx.lineTo(ox, nr)
+                        ctx.moveTo(ox + w, topRadius)
+                        ctx.lineTo(ox + w, h - bottomRadius)
+                        ctx.arcTo(ox + w, h, ox + w - bottomRadius, h, bottomRadius)
+                        ctx.lineTo(ox + bottomRadius, h)
+                        ctx.arcTo(ox, h, ox, h - bottomRadius, bottomRadius)
+                        ctx.lineTo(ox, topRadius)
                         ctx.lineWidth = 2
                         ctx.strokeStyle = Qt.rgba(1, 1, 1, ba)
                         ctx.stroke()
@@ -994,8 +1023,8 @@ PanelWindow {
                 anchors.top: parent.top
                 anchors.topMargin: window.expandedHeaderHeight
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: window.expandedWidth - 2 * window.expandedOuterPadding
-                gap: window.expandedGap
+                width: window.expandedWidth - 2 * window.expandedPanelSidePadding
+                gap: window.expandedGap * 0.8
 
                 wifiOn: window.wifiOn
                 bluetoothOn: window.bluetoothOn
@@ -1166,11 +1195,9 @@ PanelWindow {
                 }
             }
 
-            // notification view: fills the whole card. Fixed at the final size and centred,
-            // so it scales (never reflows) while the card morphs open.
             Item {
                 id: peekContent
-                width: (window.peekType === "recording" ? window.recordingPeekWidth : window.peekWidth) - 40
+                width: window.activePeekWidth - 40
                 height: window.peekType === "recording" ? window.recordingPeekHeight : window.peekHeight
                 x: (barArea.width - width) / 2
                 y: 0
@@ -1179,9 +1206,10 @@ PanelWindow {
                 transformOrigin: Item.Center
                 visible: opacity > 0.01
 
-                Row {
+                Item {
                     id: recordingContent
-                    anchors.fill: parent
+                    width: parent.width
+                    height: parent.height
                     visible: window.peekType === "recording"
 
                     MouseArea {
@@ -1191,100 +1219,167 @@ PanelWindow {
                         onClicked: window.closePeekPopup()
                     }
 
-                    Row {
+                    RowLayout {
                         id: recordingLayout
                         anchors.fill: parent
+                        anchors.margins: 14
                         z: 1
-                        spacing: 0
+                        spacing: 10
 
-                        Row {
+                        RowLayout {
                             id: waveform
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 190
-                            height: 54
-                            spacing: 3
+                            Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
+                            Layout.fillHeight: true
+                            spacing: 5
 
                             Repeater {
-                                model: 20
+                                model: 12
                                 delegate: Rectangle {
                                     required property int index
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 3
+                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.preferredWidth: 3
+                                    Layout.preferredHeight: 4 + envelope * (5 + Math.sqrt(window.obsAudioLevel) * 17)
                                     property real envelope: 0.18
                                         + 0.82 * Math.abs(Math.sin(index * 0.42 + recordingWaveState.phase * 0.35))
-                                    height: 3 + Math.sqrt(window.obsAudioLevel) * (5 + envelope * 42)
                                     radius: 2
-                                    color: "#ff453a"
-                                    opacity: 0.55 + window.obsAudioLevel * 0.45
+                                    color: "#e35b5b"
+                                    opacity: 0.62 + window.obsAudioLevel * 0.38
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.preferredWidth: 5
+                                Layout.preferredHeight: 5
+                                radius: width / 2
+                                color: window.obsRecordingPaused ? "#d69a55" : "#ff5148"
+
+                                SequentialAnimation on opacity {
+                                    running: !window.obsRecordingPaused && window.obsRecordingActive
+                                    loops: Animation.Infinite
+                                    NumberAnimation { to: 0.35; duration: 700; easing.type: Easing.InOutSine }
+                                    NumberAnimation { to: 0.9; duration: 700; easing.type: Easing.InOutSine }
                                 }
                             }
                         }
 
                         Item {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.max(8, parent.width - waveform.width - recordingTime.width - 20 - 44)
-                            height: 1
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
                         }
 
                         Text {
                             id: recordingTime
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
                             text: window.recordingTimeText()
-                            color: "#ff453a"
+                            color: "#ffffff"
                             font.family: Theme.fontFamily
                             font.weight: Font.Bold
-                            font.pixelSize: 14
+                            font.pixelSize: 16
                             font.features: { "tnum": 1 }
+                            verticalAlignment: Text.AlignVCenter
                         }
 
                         Item {
-                            width: 16
-                            height: 1
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
                         }
 
-                        Item {
-                            id: recordingStopButton
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 44
-                            height: 44
-                            scale: window.obsStopPending ? 0.65 : 1
-                            opacity: window.obsStopPending ? 0.35 : 1
+                        RowLayout {
+                            id: recordingActions
+                            Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                            spacing: 4
 
-                            Behavior on scale {
-                                NumberAnimation { duration: 150; easing.type: Easing.InOutCubic }
-                            }
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150; easing.type: Easing.InOutCubic }
+                            Item {
+                                id: recordingPauseButton
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
+                                opacity: window.obsPausePending || window.obsStopPending ? 0.45
+                                    : pauseRecordingMouse.pressed ? 0.5
+                                    : pauseRecordingMouse.containsMouse ? 0.78 : 1
+
+                                Accessible.name: window.obsRecordingPaused ? "Resume recording" : "Pause recording"
+                                ToolTip.visible: pauseRecordingMouse.containsMouse
+                                ToolTip.text: window.obsRecordingPaused ? "Resume recording" : "Pause recording"
+                                ToolTip.delay: 500
+
+                                Behavior on opacity {
+                                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                                }
+
+                                Item {
+                                    width: 14
+                                    height: 14
+                                    anchors.centerIn: parent
+
+                                    Row {
+                                        anchors.centerIn: parent
+                                        spacing: 2
+
+                                        Rectangle {
+                                            width: 3
+                                            height: 12
+                                            radius: 1.5
+                                            color: "#ff7770"
+                                        }
+
+                                        Rectangle {
+                                            width: 3
+                                            height: 12
+                                            radius: 1.5
+                                            color: "#ff7770"
+                                        }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: pauseRecordingMouse
+                                    anchors.fill: parent
+                                    enabled: !window.obsPausePending && !window.obsStopPending
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: window.requestObsRecordingPause()
+                                }
                             }
 
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: width / 2
-                                color: "transparent"
-                                border.width: 3
-                                border.color: "#ffffff"
-                            }
+                            Item {
+                                id: recordingStopButton
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
+                                opacity: window.obsStopPending || window.obsPausePending ? 0.45
+                                    : stopRecordingMouse.pressed ? 0.5
+                                    : stopRecordingMouse.containsMouse ? 0.78 : 1
 
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 17
-                                height: 17
-                                radius: 4
-                                color: "#ff453a"
-                            }
+                                Accessible.name: "Stop recording"
+                                ToolTip.visible: stopRecordingMouse.containsMouse
+                                ToolTip.text: "Stop recording"
+                                ToolTip.delay: 500
 
-                            MouseArea {
-                                anchors.fill: parent
-                                z: 2
-                                enabled: !window.obsStopPending
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: window.requestObsRecordingStop()
+                                Behavior on opacity {
+                                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                                }
+
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 11
+                                    height: 11
+                                    radius: 2.5
+                                    color: "#ff453a"
+                                }
+
+                                MouseArea {
+                                    id: stopRecordingMouse
+                                    anchors.fill: parent
+                                    enabled: !window.obsStopPending && !window.obsPausePending
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: window.requestObsRecordingStop()
+                                }
                             }
                         }
                     }
                 }
 
-                // app / website icon (falls back to the app's first letter, never an alert glyph)
                 Rectangle {
                     id: peekChip
                     scale: window.peekChipScale
@@ -1309,7 +1404,6 @@ PanelWindow {
                         mipmap: false
                         visible: status === Image.Ready
 
-                        // clip the icon to the rounded shape
                         layer.enabled: true
                         layer.effect: MultiEffect {
                             maskEnabled: true
@@ -1434,7 +1528,6 @@ PanelWindow {
                     readonly property bool charging: UPower.displayDevice.state === UPowerDeviceState.Charging
                     readonly property color tint: UPower.displayDevice.percentage <= 0.15 && !charging ? "#ff5555" : "#ffffff"
 
-                    // the expanded panel already has a Wi-Fi tile
                     Text {
                         id: wifiIcon
                         anchors.verticalCenter: parent.verticalCenter
@@ -1467,7 +1560,6 @@ PanelWindow {
                         ToolTip.toolTip.font.weight: Font.Bold
                     }
 
-                    // while charging the bolt stands in for the battery on the collapsed bar
                     Text {
                         id: batteryIcon
                         anchors.verticalCenter: parent.verticalCenter

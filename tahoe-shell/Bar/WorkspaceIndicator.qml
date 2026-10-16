@@ -14,7 +14,6 @@ Item {
     property color bgColor: "#000000"
     property int animDuration: 180
 
-    // Match Niri's easing for workspace indicator motion.
     readonly property var niriCurve: [0.25, 1.0, 0.5, 1.0, 1.0, 1.0]
 
     property bool standalone: true

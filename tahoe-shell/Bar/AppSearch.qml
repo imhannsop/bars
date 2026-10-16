@@ -113,7 +113,6 @@ Item {
         else if (q.length > 1 && isSubsequence(q, name)) s = 200
         else if ((item.genericName || "").toLowerCase().includes(q)) s = 150
         else if (Array.from(item.keywords || []).some(k => k.toLowerCase().includes(q))) s = 100
-        // boost stays under the 200 gap between tiers so frequency only reorders within a tier
         return s ? s + Math.min(counts[item.id] || 0, 30) * 5 : 0
     }
 
@@ -131,7 +130,6 @@ Item {
 
     function show(found) {
         scrollAnim.stop()
-        // keep the old rows while the panel collapses so it doesn't flash empty
         if (found.length > 0) shownResults = found
         snapping = true
         results = found
@@ -172,7 +170,6 @@ Item {
     function applyFiles(text) {
         const lines = text.split("\n")
         const q = lines[0]
-        // output carries its own query so a slow earlier run can't overwrite newer results
         if (q !== query.trim()) return
         const home = Quickshell.env("HOME")
         const lowered = q.toLowerCase()
@@ -635,7 +632,6 @@ Item {
                     id: rowMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    // positionChanged, not entered: rows scrolling under a still cursor must not steal the selection
                     onPositionChanged: root.currentIndex = row.index
                     onClicked: root.launch(row.modelData)
                 }

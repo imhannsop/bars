@@ -10,6 +10,8 @@ designed to provide quick access to essential information and actions.
 
 ## Preview
 
+[![Overcast Preview](./overcast/screenshots/prev.gif)](./overcast/screenshots/prev.mp4)
+
 ![Overcast Bar](./overcast/screenshots/bar.jpg)
 
 > Overcast is primarily a personal project and an ongoing experiment in desktop interface design.
@@ -22,7 +24,26 @@ i made this because i honestly like the UI of macOS Tahoe and also to design wha
 
 ## Preview
 
-![Overcast Bar](./tahoe-shell/images/nah-expand.jpg)
+https://github.com/imhannsop/bars/raw/main/tahoe-shell/images/prev.mp4
 
-## Expanded ver
-![Overcast Bar](./tahoe-shell/images/update.jpg)
+<video src="./tahoe-shell/images/prev.mp4" controls="controls" width="100%"></video>
+
+[▶ Watch Preview Video (prev.mp4)](./tahoe-shell/images/prev.mp4)
+
+## Screenshots
+
+### Default (Non-expanded)
+![Tahoe Shell - Non-expanded](./tahoe-shell/images/non-exp.jpg)
+
+### Expanded ver
+![Tahoe Shell - Expanded](./tahoe-shell/images/exp.jpg)
+
+### App Search
+![Tahoe Shell - Search](./tahoe-shell/images/search.jpg)
+
+### Notification Center
+![Tahoe Shell - Notifications](./tahoe-shell/images/notif.jpg)
+
+### Screen Recording Notification
+![Tahoe Shell - Screen Recording](./tahoe-shell/images/record.jpg)
+

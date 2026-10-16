@@ -10,7 +10,7 @@ designed to provide quick access to essential information and actions.
 
 ## Preview
 
-[![Overcast Preview](./overcast/screenshots/prev.gif)](./overcast/screenshots/prev.mp4)
+https://github.com/user-attachments/assets/a5f1be51-cdbf-4eaa-8904-fc6ab913242d
 
 ![Overcast Bar](./overcast/screenshots/bar.jpg)
 
